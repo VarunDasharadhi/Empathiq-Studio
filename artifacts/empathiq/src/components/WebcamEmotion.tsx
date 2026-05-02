@@ -657,37 +657,36 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
           )}
         </div>
 
-        {/* Row 3 — AI Reading */}
-        <div className="flex items-start gap-2">
-          <span className="text-sm leading-none w-5 text-center flex-none mt-0.5">🧠</span>
-          <span className="text-[10px] text-muted-foreground/50 w-10 flex-none mt-0.5">AI</span>
-          <div className="flex-1 min-h-[28px]">
-            {readingLoading && !aiReading ? (
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <div className="w-2.5 h-2.5 rounded-full border border-primary/40 border-t-primary animate-spin" />
-                <span className="text-[10px] text-muted-foreground/30 italic">Reading…</span>
-              </div>
-            ) : aiReading ? (
-              <p
-                key={readingKey}
-                className="text-[10px] leading-relaxed text-foreground/75 italic"
-                style={{ animation: "eiFadeIn 0.8s ease-out forwards" }}
-              >
-                "{aiReading}"
-              </p>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/25 italic">Waiting for emotion data…</span>
-            )}
-          </div>
-          {readingLoading && aiReading && (
-            <div className="flex-none w-2.5 h-2.5 rounded-full border border-primary/40 border-t-primary animate-spin mt-0.5" />
-          )}
-        </div>
       </div>
 
-      {/* Emotion timeline chart */}
+      {/* Bottom chart: voice prosody bars when voice active, else face timeline */}
       <div className="flex-none border-t border-border bg-[#0d0f14]" style={{ height: 80 }}>
-        {timeline.length >= 2 ? (
+        {voiceEmotion && voiceEmotionScores && Object.keys(voiceEmotionScores).length > 0 ? (
+          // Voice prosody bar chart — top 8 emotions
+          <div className="flex items-end gap-1 h-full px-3 py-2">
+            {Object.entries(voiceEmotionScores)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 8)
+              .map(([name, score]) => {
+                const color = VOICE_EMOTION_COLORS[name.toLowerCase()] ?? "#6b7280";
+                const heightPct = Math.max(4, Math.round(score * 100));
+                return (
+                  <div key={name} className="flex flex-col items-center gap-0.5 flex-1 min-w-0">
+                    <div
+                      className="w-full rounded-t-sm transition-all duration-500"
+                      style={{ height: `${heightPct}%`, backgroundColor: color, opacity: 0.8, boxShadow: `0 0 4px ${color}50` }}
+                    />
+                    <span
+                      className="text-[7px] text-center leading-none truncate w-full"
+                      style={{ color }}
+                    >
+                      {name.slice(0, 5)}
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        ) : timeline.length >= 2 ? (
           <ResponsiveContainer width="100%" height={120}>
             <LineChart data={timeline} margin={{ top: 10, right: 12, left: 36, bottom: 6 }}>
               <YAxis
