@@ -105,12 +105,12 @@ function EviInner({ onVoiceEmotion, faceEmotionCounts }: Omit<Props, "sessionId"
     }
   }, [isConnected, isConnecting, onVoiceEmotion]);
 
-  const handleToggle = useCallback(async () => {
+  const handleToggle = useCallback(() => {
     if (isConnected || isConnecting) {
       disconnect();
     } else {
       setTranscript([]);
-      await connect();
+      connect().catch(() => {});
     }
   }, [isConnected, isConnecting, connect, disconnect]);
 
