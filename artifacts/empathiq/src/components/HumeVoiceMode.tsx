@@ -1,415 +1,234 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-
-// ── Browser Speech API types ────────────────────────────────────────────────
-interface SREvent extends Event {
-  results: { [i: number]: { isFinal: boolean; [j: number]: { transcript: string } }; length: number };
-  resultIndex: number;
-}
-interface SRInstance extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((e: SREvent) => void) | null;
-  onerror: ((e: Event & { error?: string }) => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SRInstance;
-    webkitSpeechRecognition: new () => SRInstance;
-  }
-}
-
-// ── Personas ────────────────────────────────────────────────────────────────
-interface Persona { id: string; label: string; emoji: string; color: string; glow: string; systemPrompt: string; }
-
-const PERSONAS: Persona[] = [
-  { id: "therapist", label: "Therapist", emoji: "🧠", color: "#818cf8", glow: "rgba(129,140,248,0.5)",
-    systemPrompt: "You are a compassionate therapist. Speak gently and validate feelings first. Ask one open question at a time. Be calm and non-judgmental. Never diagnose. Keep voice responses to 2-3 sentences." },
-  { id: "dating", label: "Dating Coach", emoji: "💘", color: "#f472b6", glow: "rgba(244,114,182,0.5)",
-    systemPrompt: "You are a confident and playful dating coach. Be direct, fun, a little cheeky. Help build genuine confidence. Keep it real, short, and punchy — 2-3 sentences for voice." },
-  { id: "sales", label: "Sales Coach", emoji: "💼", color: "#34d399", glow: "rgba(52,211,153,0.5)",
-    systemPrompt: "You are a sharp sales coach. Be direct, tactical, motivating. Push them to think bigger. Keep responses concise for voice — 2-3 sentences." },
-  { id: "meditation", label: "Meditation", emoji: "🧘", color: "#67e8f9", glow: "rgba(103,232,249,0.5)",
-    systemPrompt: "You are a peaceful meditation guide. Speak very softly with gentle pauses. Offer breathwork and grounding. Language is spacious and calming. Keep responses short — 2-3 sentences." },
-  { id: "smart-glasses", label: "Smart Glasses", emoji: "🥽", color: "#a78bfa", glow: "rgba(167,139,250,0.5)",
-    systemPrompt: "You are a real-time social assistant in the user's ear. Give short whispered actionable coaching — what to say, how to respond. Be fast and precise — 1-2 sentences max." },
-  { id: "anger-release", label: "Anger Release", emoji: "😤", color: "#f87171", glow: "rgba(248,113,113,0.5)",
-    systemPrompt: "You are a safe space to vent. Validate everything without judgment. Keep responses short and grounding — 2-3 sentences." },
-  { id: "focus-coach", label: "Focus Coach", emoji: "🎯", color: "#fbbf24", glow: "rgba(251,191,36,0.5)",
-    systemPrompt: "You are an intense focus coach. Help cut through distraction. Be structured and energizing — 2-3 sentences for voice." },
-  { id: "sleep-guide", label: "Sleep Guide", emoji: "🌙", color: "#818cf8", glow: "rgba(129,140,248,0.4)",
-    systemPrompt: "You are a soothing sleep guide. Use a slow, calming voice. Guide toward relaxation. Keep responses gentle and brief — 2-3 sentences." },
-  { id: "confidence", label: "Confidence", emoji: "⚡", color: "#fb923c", glow: "rgba(251,146,60,0.5)",
-    systemPrompt: "You are an enthusiastic confidence coach. Be bold and affirming. Challenge limiting beliefs. Keep it energizing and brief — 2-3 sentences." },
-];
-
-// ── Voice helpers ────────────────────────────────────────────────────────────
-function getSpeechParams(emotion: string | null, modeId: string): { rate: number; pitch: number } {
-  if (modeId === "meditation" || modeId === "sleep-guide") return { rate: 0.75, pitch: 0.9 };
-  switch (emotion) {
-    case "sad":     return { rate: 0.85, pitch: 0.85 };
-    case "happy":   return { rate: 1.05, pitch: 1.1 };
-    case "angry":   return { rate: 0.9,  pitch: 0.95 };
-    case "fearful": return { rate: 0.9,  pitch: 0.9 };
-    default:        return { rate: 1.0,  pitch: 1.0 };
-  }
-}
-
-function pickBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const preferred = [
-    "Samantha", "Google UK English Female", "Microsoft Aria Online (Natural)",
-    "Microsoft Jenny Online (Natural)", "Microsoft Aria", "Karen", "Moira",
-    "Fiona", "Google US English", "Victoria",
-  ];
-  for (const name of preferred) {
-    const v = voices.find((v) => v.name.includes(name));
-    if (v) return v;
-  }
-  return (
-    voices.find((v) => v.lang.startsWith("en-") && !v.name.toLowerCase().includes("compact")) ??
-    voices.find((v) => v.lang.startsWith("en")) ??
-    voices[0] ?? null
-  );
-}
-
-function getDominantEmotion(counts: Record<string, number>): string | null {
-  const entries = Object.entries(counts);
-  if (!entries.length) return null;
-  return entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-}
-
-// ── Sound wave animation ─────────────────────────────────────────────────────
-function SoundWave({ color }: { color: string }) {
-  return (
-    <div className="flex items-center gap-0.5 h-5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div
-          key={i}
-          className="w-0.5 rounded-full"
-          style={{ backgroundColor: color, animation: `soundBar 1.2s ease-in-out ${i * 0.15}s infinite`, height: "100%" }}
-        />
-      ))}
-    </div>
-  );
-}
+import { VoiceProvider, useVoice, VoiceReadyState, type JSONMessage } from "@humeai/voice-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-type VoiceState = "idle" | "listening" | "processing" | "speaking";
-interface VoiceMsg { id: string; role: "user" | "assistant"; content: string; }
-
 interface Props {
   onVoiceEmotion: (emotion: string | null, scores: Record<string, number> | null) => void;
   sessionId: number | null;
   faceEmotionCounts: Record<string, number>;
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
-export default function HumeVoiceMode({ faceEmotionCounts }: Props) {
-  const [activePersona, setActivePersona] = useState<Persona>(PERSONAS[0]);
-  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
-  const [messages, setMessages] = useState<VoiceMsg[]>([]);
-  const [interimText, setInterimText] = useState("");
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [speechSupported] = useState(
-    () => typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition)
-  );
+interface HumeConfig {
+  apiKey: string;
+  configId: string | null;
+}
 
-  const recognitionRef = useRef<SRInstance | null>(null);
-  const voiceStateRef = useRef<VoiceState>("idle");
-  const messagesRef = useRef<VoiceMsg[]>([]);
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
-  const faceCountsRef = useRef(faceEmotionCounts);
-  const personaRef = useRef(activePersona);
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function topEmotion(scores: Record<string, number>): string | null {
+  const entries = Object.entries(scores);
+  if (!entries.length) return null;
+  return entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
+function emotionColor(name: string | null): string {
+  const map: Record<string, string> = {
+    joy: "#facc15", happiness: "#facc15", amusement: "#fb923c", excitement: "#fb923c",
+    sadness: "#60a5fa", distress: "#818cf8", anxiety: "#c084fc", fear: "#c084fc",
+    anger: "#f87171", disgust: "#f87171", contempt: "#fb923c",
+    calmness: "#4ade80", contentment: "#4ade80", satisfaction: "#34d399",
+    surprise: "#fb923c", interest: "#67e8f9", concentration: "#67e8f9",
+    boredom: "#9ca3af", neutral: "#9ca3af",
+  };
+  if (!name) return "#818cf8";
+  const key = name.toLowerCase();
+  return map[key] ?? "#818cf8";
+}
+
+function SoundWave({ color }: { color: string }) {
+  return (
+    <div className="flex items-center gap-[3px] h-5">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="w-[3px] rounded-full"
+          style={{ backgroundColor: color, height: "100%", animation: `soundBar 1.2s ease-in-out ${i * 0.12}s infinite` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Transcript message ───────────────────────────────────────────────────────
+interface TxMsg { id: string; role: "user" | "assistant"; text: string; emotion: string | null; scores: Record<string, number> }
+
+// ── Inner component (needs VoiceProvider context) ────────────────────────────
+function EviInner({ onVoiceEmotion, faceEmotionCounts }: Omit<Props, "sessionId">) {
+  const { connect, disconnect, readyState, messages, isMuted, mute, unmute } = useVoice();
+  const [transcript, setTranscript] = useState<TxMsg[]>([]);
+  const [topVoiceEmotion, setTopVoiceEmotion] = useState<string | null>(null);
+  const [topVoiceScores, setTopVoiceScores] = useState<Record<string, number>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { voiceStateRef.current = voiceState; }, [voiceState]);
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-  useEffect(() => { voicesRef.current = voices; }, [voices]);
-  useEffect(() => { faceCountsRef.current = faceEmotionCounts; }, [faceEmotionCounts]);
-  useEffect(() => { personaRef.current = activePersona; }, [activePersona]);
+  const isConnected = readyState === VoiceReadyState.OPEN;
+  const isConnecting = readyState === VoiceReadyState.CONNECTING;
 
-  // Load TTS voices
+  // Parse Hume EVI messages
   useEffect(() => {
-    const load = () => setVoices(window.speechSynthesis.getVoices());
-    load();
-    window.speechSynthesis.addEventListener("voiceschanged", load);
-    return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
-  }, []);
+    if (!messages.length) return;
+    const latest = messages[messages.length - 1] as JSONMessage;
 
-  // Auto-scroll
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, interimText]);
-
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      window.speechSynthesis.cancel();
-      recognitionRef.current?.abort();
-    };
-  }, []);
-
-  const speakText = useCallback((text: string, emotion: string | null, modeId: string) => {
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    const { rate, pitch } = getSpeechParams(emotion, modeId);
-    const voice = pickBestVoice(voicesRef.current);
-    if (voice) utter.voice = voice;
-    utter.rate = rate;
-    utter.pitch = pitch;
-    utter.volume = 1;
-    setVoiceState("speaking");
-    utter.onend = () => setVoiceState("idle");
-    utter.onerror = () => setVoiceState("idle");
-    window.speechSynthesis.speak(utter);
-  }, []);
-
-  const sendToClaudeAndSpeak = useCallback(async (text: string) => {
-    const emotion = getDominantEmotion(faceCountsRef.current);
-    const persona = personaRef.current;
-    const userMsg: VoiceMsg = { id: `u-${Date.now()}`, role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
-    setVoiceState("processing");
-
-    const apiMessages = [...messagesRef.current, userMsg].map((m) => ({
-      role: m.role,
-      content: m.role === "user" && m.id === userMsg.id
-        ? `[EMOTION: ${emotion ?? "neutral"}] ${m.content}`
-        : m.content,
-    }));
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages, systemPrompt: persona.systemPrompt }),
-      });
-      if (!res.ok) throw new Error("API error");
-      const data = await res.json() as { response: string };
-      const assistantMsg: VoiceMsg = { id: `a-${Date.now()}`, role: "assistant", content: data.response };
-      setMessages((prev) => [...prev, assistantMsg]);
-      speakText(data.response, emotion, persona.id);
-    } catch {
-      setError("Could not reach Claude. Check your connection.");
-      setVoiceState("idle");
+    if (latest.type === "user_message") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msg = latest as any;
+      const text: string = msg.message?.content ?? "";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const prosody: Record<string, number> = msg.models?.prosody?.scores ?? {};
+      const emotion = topEmotion(prosody);
+      onVoiceEmotion(emotion, prosody);
+      setTopVoiceEmotion(emotion);
+      setTopVoiceScores(prosody);
+      if (text.trim()) {
+        setTranscript((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text, emotion, scores: prosody }]);
+      }
     }
-  }, [speakText]);
 
-  const startListening = useCallback(() => {
-    if (voiceStateRef.current !== "idle") return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setError("Speech recognition not supported. Try Chrome or Safari."); return; }
-    setError(null);
-    setInterimText("");
-    const rec = new SR();
-    rec.continuous = false;
-    rec.interimResults = true;
-    rec.lang = "en-US";
-    rec.onresult = (e) => {
-      let interim = "";
-      let final = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) final += t;
-        else interim += t;
+    if (latest.type === "assistant_message") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msg = latest as any;
+      const text: string = msg.message?.content ?? "";
+      if (text.trim()) {
+        setTranscript((prev) => [...prev, { id: `a-${Date.now()}`, role: "assistant", text, emotion: null, scores: {} }]);
       }
-      setInterimText(interim || "");
-      if (final.trim()) {
-        setInterimText("");
-        recognitionRef.current = null;
-        sendToClaudeAndSpeak(final.trim());
-      }
-    };
-    rec.onerror = (e) => {
-      const code = e.error;
-      if (code !== "no-speech") setError(`Mic error: ${code ?? "unknown"}`);
-      setVoiceState("idle");
-      setInterimText("");
-      recognitionRef.current = null;
-    };
-    rec.onend = () => {
-      if (voiceStateRef.current === "listening") setVoiceState("idle");
-      setInterimText("");
-      recognitionRef.current = null;
-    };
-    recognitionRef.current = rec;
-    setVoiceState("listening");
-    try { rec.start(); } catch { setError("Could not start microphone."); setVoiceState("idle"); }
-  }, [sendToClaudeAndSpeak]);
+    }
+  }, [messages, onVoiceEmotion]);
 
-  const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
-    setVoiceState("idle");
-    setInterimText("");
-  }, []);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [transcript]);
 
-  const stopSpeaking = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setVoiceState("idle");
-  }, []);
+  // Clear transcript on disconnect
+  useEffect(() => {
+    if (!isConnected && !isConnecting) {
+      onVoiceEmotion(null, null);
+      setTopVoiceEmotion(null);
+      setTopVoiceScores({});
+    }
+  }, [isConnected, isConnecting, onVoiceEmotion]);
 
-  const handleMicClick = useCallback(() => {
-    if (voiceState === "idle") startListening();
-    else if (voiceState === "listening") stopListening();
-    else if (voiceState === "speaking") stopSpeaking();
-  }, [voiceState, startListening, stopListening, stopSpeaking]);
+  const handleToggle = useCallback(async () => {
+    if (isConnected || isConnecting) {
+      disconnect();
+    } else {
+      setTranscript([]);
+      await connect();
+    }
+  }, [isConnected, isConnecting, connect, disconnect]);
 
-  const handlePersonaChange = (persona: Persona) => {
-    if (persona.id === activePersona.id) return;
-    window.speechSynthesis.cancel();
-    recognitionRef.current?.abort();
-    recognitionRef.current = null;
-    setActivePersona(persona);
-    setMessages([]);
-    setVoiceState("idle");
-    setInterimText("");
-    setError(null);
-  };
-
-  const micColor =
-    voiceState === "listening"  ? "#4ade80" :
-    voiceState === "speaking"   ? "#818cf8" :
-    voiceState === "processing" ? "#fb923c" :
-    activePersona.color;
-
-  const statusText =
-    voiceState === "idle"       ? "Tap to speak" :
-    voiceState === "listening"  ? "Listening…" :
-    voiceState === "processing" ? "Thinking…" :
-    "Speaking…";
+  // Dominant face emotion for combined reading
+  const dominantFace = topEmotion(faceEmotionCounts);
+  const voiceColor = emotionColor(topVoiceEmotion);
+  const micColor = isConnected ? "#f87171" : "#818cf8";
 
   return (
     <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
       {/* Header */}
       <div className="flex-none flex items-center justify-between px-5 py-3.5 border-b border-white/8 bg-black/20">
         <div>
-          <p className="text-sm font-semibold text-foreground">Voice Mode</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Web Speech + Claude</p>
+          <p className="text-sm font-semibold text-foreground">EVI Voice Mode</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Powered by Hume + Claude Haiku 4.5</p>
         </div>
-        <div
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-          style={{ backgroundColor: `${micColor}18`, color: micColor, boxShadow: `0 0 0 1px ${micColor}35` }}
-        >
-          <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: micColor }} />
-          {statusText}
-        </div>
+        {isConnected && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+            style={{ backgroundColor: "rgba(248,113,113,0.12)", color: "#f87171", boxShadow: "0 0 0 1px rgba(248,113,113,0.35)" }}>
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            Live
+          </div>
+        )}
       </div>
 
-      {/* Persona selector */}
-      <div className="flex-none px-4 pt-3 pb-2 flex gap-2 overflow-x-auto scrollbar-none">
-        {PERSONAS.map((p) => {
-          const isActive = p.id === activePersona.id;
-          return (
-            <button
-              key={p.id}
-              onClick={() => handlePersonaChange(p)}
-              className="flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 whitespace-nowrap"
-              style={isActive
-                ? { backgroundColor: `${p.color}18`, color: p.color, boxShadow: `0 0 0 1.5px ${p.color}, 0 0 12px ${p.glow}`, animation: "modePulse 2.5s ease-in-out infinite" }
-                : { backgroundColor: "transparent", color: "var(--muted-foreground)", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }
-              }
-            >
-              <span>{p.emoji}</span><span>{p.label}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Emotion reading row */}
+      {isConnected && (
+        <div className="flex-none flex items-center gap-3 px-5 py-2.5 border-b border-white/5 bg-black/10">
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground">👁️ Face:</span>
+            <span className="font-medium capitalize" style={{ color: emotionColor(dominantFace) }}>
+              {dominantFace ?? "—"}
+            </span>
+          </div>
+          <div className="w-px h-3 bg-white/10" />
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground">🎙️ Voice Emotion:</span>
+            <span className="font-medium capitalize" style={{ color: voiceColor }}>
+              {topVoiceEmotion ?? "—"}
+            </span>
+          </div>
+          {topVoiceEmotion && (
+            <>
+              <div className="w-px h-3 bg-white/10" />
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-muted-foreground">🧠 Reading:</span>
+                <span className="font-medium" style={{ color: voiceColor }}>
+                  {topVoiceScores[topVoiceEmotion] ? `${Math.round(topVoiceScores[topVoiceEmotion] * 100)}%` : ""}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-3 min-h-0">
-        {messages.length === 0 && !interimText && (
-          <div className="flex-1 flex flex-col items-center justify-center text-center gap-3 py-10 opacity-60">
-            <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
-              style={{ backgroundColor: `${activePersona.color}15`, boxShadow: `0 0 0 1px ${activePersona.color}25` }}
-            >
-              {activePersona.emoji}
+      {/* Transcript */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3 min-h-0">
+        {transcript.length === 0 && (
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-10 opacity-60">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
+              style={{ backgroundColor: "rgba(129,140,248,0.12)", boxShadow: "0 0 0 1px rgba(129,140,248,0.25)" }}>
+              🎙️
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground">{activePersona.label} ready</p>
-              <p className="text-xs text-muted-foreground mt-1">Tap the mic below and start speaking</p>
+              <p className="text-sm font-medium text-foreground">Speak naturally</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">
+                EVI detects your vocal emotion in real time and responds with an expressive human voice
+              </p>
             </div>
           </div>
         )}
 
-        {messages.map((msg) => (
-          <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed"
-              style={msg.role === "assistant"
-                ? { backgroundColor: `${activePersona.color}12`, color: "var(--foreground)", boxShadow: `0 0 0 1px ${activePersona.color}25` }
-                : { backgroundColor: "rgba(255,255,255,0.07)", color: "var(--foreground)" }
-              }
-            >
-              {msg.content}
+        {transcript.map((msg) => (
+          <div key={msg.id} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
+            <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+              msg.role === "user"
+                ? "bg-primary text-primary-foreground rounded-br-sm"
+                : "bg-white/5 border border-white/8 text-foreground rounded-bl-sm"
+            }`}>
+              {msg.role === "user" && msg.emotion && (
+                <div className="flex items-center gap-1 mb-1 text-[10px] font-medium opacity-75">
+                  <div className="w-1 h-1 rounded-full" style={{ backgroundColor: emotionColor(msg.emotion) }} />
+                  <span className="capitalize">{msg.emotion}</span>
+                </div>
+              )}
+              <p className="whitespace-pre-wrap">{msg.text}</p>
             </div>
           </div>
         ))}
 
-        {interimText && (
-          <div className="flex justify-end">
-            <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-white/4 text-muted-foreground italic">
-              {interimText}…
-            </div>
-          </div>
-        )}
-
-        {voiceState === "processing" && (
-          <div className="flex justify-start">
-            <div
-              className="px-4 py-3 rounded-2xl flex items-center gap-1.5"
-              style={{ backgroundColor: `${activePersona.color}12`, boxShadow: `0 0 0 1px ${activePersona.color}25` }}
-            >
-              {[0, 0.2, 0.4].map((delay, i) => (
-                <div
-                  key={i}
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: activePersona.color, animation: `dot-bounce 1.2s ease-in-out ${delay}s infinite` }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
         <div ref={bottomRef} />
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="flex-none mx-4 mb-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      {/* Mic control area */}
+      {/* Mic control */}
       <div className="flex-none px-6 pb-6 pt-3 flex flex-col items-center gap-3 border-t border-white/5">
-        {voiceState === "speaking" && <SoundWave color={activePersona.color} />}
+        {isConnected && !isMuted && <SoundWave color={micColor} />}
 
         <button
-          onClick={handleMicClick}
-          disabled={!speechSupported || voiceState === "processing"}
-          className="relative w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 focus:outline-none disabled:opacity-40"
+          onClick={handleToggle}
+          disabled={isConnecting}
+          className="relative w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 focus:outline-none disabled:opacity-50"
           style={{
-            backgroundColor: `${micColor}20`,
-            boxShadow: voiceState === "listening"
-              ? `0 0 0 0 ${micColor}60, 0 0 28px ${micColor}50`
-              : `0 0 0 1.5px ${micColor}50`,
-            animation: voiceState === "listening" ? "modePulse 1.5s ease-in-out infinite" : "none",
+            backgroundColor: isConnected ? "rgba(248,113,113,0.18)" : "rgba(129,140,248,0.18)",
+            boxShadow: isConnected
+              ? "0 0 0 0 rgba(248,113,113,0.6), 0 0 28px rgba(248,113,113,0.4)"
+              : "0 0 0 1.5px rgba(129,140,248,0.5)",
+            animation: isConnected ? "modePulse 1.5s ease-in-out infinite" : "none",
           }}
         >
-          {voiceState === "processing" ? (
-            <div className="w-6 h-6 rounded-full border-2 border-transparent border-t-orange-400 animate-spin" />
-          ) : voiceState === "speaking" ? (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: micColor }}>
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+          {isConnecting ? (
+            <div className="w-6 h-6 rounded-full border-2 border-transparent border-t-violet-400 animate-spin" />
+          ) : isConnected ? (
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round">
+              <rect x="6" y="4" width="4" height="16" rx="1" fill="#f87171" fillOpacity="0.8" />
+              <rect x="14" y="4" width="4" height="16" rx="1" fill="#f87171" fillOpacity="0.8" />
             </svg>
           ) : (
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: micColor }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
               <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
               <line x1="12" y1="19" x2="12" y2="23" />
@@ -418,24 +237,80 @@ export default function HumeVoiceMode({ faceEmotionCounts }: Props) {
           )}
         </button>
 
-        <div className="flex items-center gap-3">
-          <p className="text-xs text-muted-foreground">{statusText}</p>
-          {voiceState === "speaking" && (
-            <button
-              onClick={stopSpeaking}
-              className="text-[10px] px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Stop
-            </button>
-          )}
-        </div>
-
-        {!speechSupported && (
-          <p className="text-xs text-destructive/70 text-center max-w-[200px]">
-            Speech recognition not supported. Use Chrome or Safari.
-          </p>
+        {isConnected && (
+          <button
+            onClick={() => (isMuted ? unmute() : mute())}
+            className="text-xs px-3 py-1.5 rounded-full transition-colors"
+            style={isMuted
+              ? { backgroundColor: "rgba(248,113,113,0.15)", color: "#f87171", boxShadow: "0 0 0 1px rgba(248,113,113,0.3)" }
+              : { backgroundColor: "rgba(255,255,255,0.05)", color: "var(--muted-foreground)" }}
+          >
+            {isMuted ? "🔇 Muted — tap to unmute" : "🎙️ Tap to mute"}
+          </button>
         )}
+
+        <p className="text-xs text-muted-foreground">
+          {isConnecting ? "Connecting to EVI…" : isConnected ? "Tap to end session" : "Tap to start voice session"}
+        </p>
       </div>
     </div>
+  );
+}
+
+// ── Wrapper that fetches creds + provides VoiceProvider context ──────────────
+export default function HumeVoiceMode({ onVoiceEmotion, sessionId, faceEmotionCounts }: Props) {
+  const [config, setConfig] = useState<HumeConfig | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch("/api/hume/token")
+      .then((r) => r.json())
+      .then((d: unknown) => {
+        if (cancelled) return;
+        const data = d as { apiKey?: string; configId?: string | null; error?: string };
+        if (data.error || !data.apiKey) {
+          setError(data.error ?? "Missing HUME_API_KEY — add it to Replit Secrets.");
+        } else {
+          setConfig({ apiKey: data.apiKey, configId: data.configId ?? null });
+        }
+      })
+      .catch(() => { if (!cancelled) setError("Could not reach the server."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center gap-3 text-muted-foreground">
+        <div className="w-8 h-8 rounded-full border-2 border-transparent border-t-violet-400 animate-spin" />
+        <p className="text-sm">Loading EVI…</p>
+      </div>
+    );
+  }
+
+  if (error || !config) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center gap-3 px-8 text-center">
+        <div className="text-3xl">🎙️</div>
+        <p className="text-sm font-medium text-foreground">EVI not configured</p>
+        <p className="text-xs text-muted-foreground">{error ?? "Unknown error"}</p>
+      </div>
+    );
+  }
+
+  return (
+    <VoiceProvider
+      auth={{ type: "apiKey", value: config.apiKey }}
+      configId={config.configId ?? undefined}
+    >
+      <EviInner
+        onVoiceEmotion={onVoiceEmotion}
+        faceEmotionCounts={faceEmotionCounts}
+      />
+    </VoiceProvider>
   );
 }
