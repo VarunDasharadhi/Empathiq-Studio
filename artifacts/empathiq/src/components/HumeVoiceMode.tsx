@@ -199,31 +199,18 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
     <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
       {/* ── Header ── */}
       <div className="flex-none flex items-center justify-between px-4 py-2.5 border-b border-white/8 bg-black/20">
-        {/* Back button — always visible */}
-        <button
-          onClick={handleExit}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-white/6 transition-all"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 5l-7 7 7 7" />
-          </svg>
-          Chat
-        </button>
-
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col">
           <p className="text-xs font-semibold text-foreground">EVI Voice Mode</p>
           <p className="text-[10px] text-muted-foreground">Hume EVI · Claude Haiku 4.5</p>
         </div>
 
-        {/* Live indicator / placeholder */}
-        {isOpen ? (
+        {/* Live indicator */}
+        {isOpen && (
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium bg-red-500/12 text-red-300"
             style={{ boxShadow: "0 0 0 1px rgba(248,113,113,0.35)" }}>
             <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
             Live
           </div>
-        ) : (
-          <div className="w-[58px]" />
         )}
       </div>
 
