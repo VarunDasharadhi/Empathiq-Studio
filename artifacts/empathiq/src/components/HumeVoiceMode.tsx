@@ -19,7 +19,9 @@ const PERSONAS: Persona[] = [
     color: "#818cf8",
     glow: "rgba(129,140,248,0.5)",
     systemPrompt:
-      "You are EmpathIQ, a compassionate and warm therapist. Speak gently at a measured pace. Always validate feelings before exploring them. Ask only one open question at a time. Your tone is calm, safe, and non-judgmental. Never diagnose. Be a caring presence.",
+      "In this session you are acting as a compassionate therapist. " +
+      "Speak gently at a measured pace. Always validate feelings before exploring them. " +
+      "Ask only one open question at a time. Be calm, safe, and non-judgmental. Never diagnose.",
   },
   {
     id: "dating",
@@ -28,7 +30,9 @@ const PERSONAS: Persona[] = [
     color: "#f472b6",
     glow: "rgba(244,114,182,0.5)",
     systemPrompt:
-      "You are EmpathIQ, a confident and playful dating coach. Be direct, fun, and a little cheeky — never preachy. Help them understand attraction and build genuine confidence. Your voice is warm and engaging. Keep it real, not cheesy.",
+      "In this session you are acting as a confident and playful dating coach. " +
+      "Be direct, fun, and a little cheeky — never preachy. " +
+      "Help them understand attraction and build genuine confidence. Keep it real, not cheesy.",
   },
   {
     id: "sales",
@@ -37,7 +41,9 @@ const PERSONAS: Persona[] = [
     color: "#34d399",
     glow: "rgba(52,211,153,0.5)",
     systemPrompt:
-      "You are EmpathIQ, a sharp and energetic sales coach. Be direct, tactical, and motivating. Use proven frameworks when helpful. Push them to think bigger and execute better. Your voice is assertive and inspiring.",
+      "In this session you are acting as a sharp and energetic sales coach. " +
+      "Be direct, tactical, and motivating. Use proven frameworks when helpful. " +
+      "Push them to think bigger and execute better. Your energy is assertive and inspiring.",
   },
   {
     id: "meditation",
@@ -46,7 +52,10 @@ const PERSONAS: Persona[] = [
     color: "#67e8f9",
     glow: "rgba(103,232,249,0.5)",
     systemPrompt:
-      "You are EmpathIQ, a peaceful meditation guide. Speak very slowly and softly with gentle pauses. Offer breathwork, body scans, and grounding techniques. Your language is spacious and calming. Help them arrive in the present moment.",
+      "In this session you are acting as a peaceful meditation guide. " +
+      "Speak very slowly and softly with gentle pauses. " +
+      "Offer breathwork, body scans, and grounding techniques. " +
+      "Your language is spacious and calming. Help them arrive in the present moment.",
   },
 ];
 
@@ -59,6 +68,17 @@ const GENDER_OPTIONS: Array<{ value: Gender; label: string; icon: string }> = [
   { value: "neutral", label: "Neutral", icon: "◎" },
 ];
 
+// ── Base EmpathIQ system prompt (mirrors what's set in the EVI config) ─────
+// The EVI config has this as the default; sessionSettings.systemPrompt overrides
+// it per-session with: BASE_PROMPT + persona addendum.
+const EMPATHIQ_BASE_PROMPT =
+  "You are EmpathIQ, an emotionally intelligent AI companion. " +
+  "You receive real-time data about the user's facial emotion and vocal emotion. " +
+  "Combine both signals to deeply understand what the user is truly feeling beneath their words. " +
+  "Respond like a warm, wise human — not a robot. Vary your tone, pace, and energy naturally. " +
+  "If they sound anxious but look happy, acknowledge the complexity. " +
+  "Be present, real, and human.";
+
 // ── Types ──────────────────────────────────────────────────────────────────
 interface EVIConfig { id: string; version: number; name: string; }
 interface EVIVoice  { id: string; name: string; }
@@ -67,6 +87,7 @@ interface HumeConfig {
   apiKey: string;
   configs: EVIConfig[];
   voices: EVIVoice[];
+  defaultConfigId: string | null;
 }
 
 interface TranscriptEntry {
@@ -534,9 +555,9 @@ function StatusBadge({ readyState, error }: { readyState: VoiceReadyState; error
 
 // ── Inner component (must be child of VoiceProvider) ──────────────────────
 function VoiceModeInner({
-  apiKey, configs, voices, onVoiceEmotion, sessionId, faceEmotionCounts,
+  apiKey, configs, voices, defaultConfigId, onVoiceEmotion, sessionId, faceEmotionCounts,
 }: {
-  apiKey: string; configs: EVIConfig[]; voices: EVIVoice[];
+  apiKey: string; configs: EVIConfig[]; voices: EVIVoice[]; defaultConfigId: string | null;
   onVoiceEmotion: Props["onVoiceEmotion"];
   sessionId: number | null; faceEmotionCounts: Record<string, number>;
 }) {
@@ -550,7 +571,7 @@ function VoiceModeInner({
   const [transcript, setTranscript]           = useState<TranscriptEntry[]>([]);
   const [persona, setPersona]                 = useState<Persona>(PERSONAS[0]);
   const [gender, setGender]                   = useState<Gender>("neutral");
-  const [selectedConfigId, setSelectedConfig] = useState<string | null>(configs[0]?.id ?? null);
+  const [selectedConfigId, setSelectedConfig] = useState<string | null>(defaultConfigId ?? configs[0]?.id ?? null);
   const [selectedVoiceId, setSelectedVoice]   = useState<string | null>(null);
   const [voiceEmotionCounts, setVoiceEmotionCounts] = useState<Record<string, number>>({});
   const [summary, setSummary]                 = useState<VoiceSummary | null>(null);
@@ -571,7 +592,7 @@ function VoiceModeInner({
       ...(opts.configId ? { configId: opts.configId } : {}),
       sessionSettings: {
         type: "session_settings" as const,
-        systemPrompt: opts.persona.systemPrompt,
+        systemPrompt: `${EMPATHIQ_BASE_PROMPT}\n\n${opts.persona.systemPrompt}`,
         ...(opts.voiceId ? { voiceId: opts.voiceId } : {}),
       },
       audioConstraints: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -901,7 +922,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, sessionId, faceEmotionCo
     fetch("/api/hume/config")
       .then((r) => r.json() as Promise<Partial<HumeConfig> & { error?: string }>)
       .then((data) => {
-        if (data.apiKey) setHumeConfig({ apiKey: data.apiKey, configs: data.configs ?? [], voices: data.voices ?? [] });
+        if (data.apiKey) setHumeConfig({ apiKey: data.apiKey, configs: data.configs ?? [], voices: data.voices ?? [], defaultConfigId: data.defaultConfigId ?? null });
         else setFetchError(true);
       })
       .catch(() => setFetchError(true));
@@ -929,6 +950,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, sessionId, faceEmotionCo
     <VoiceProvider clearMessagesOnDisconnect={false} messageHistoryLimit={300}>
       <VoiceModeInner
         apiKey={humeConfig.apiKey} configs={humeConfig.configs} voices={humeConfig.voices}
+        defaultConfigId={humeConfig.defaultConfigId}
         onVoiceEmotion={onVoiceEmotion} sessionId={sessionId} faceEmotionCounts={faceEmotionCounts}
       />
     </VoiceProvider>

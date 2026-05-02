@@ -2,6 +2,9 @@ import { Router, type IRouter } from "express";
 
 const router: IRouter = Router();
 
+// Hardcoded EmpathIQ EVI config (claude-sonnet-4-20250514 + Kora voice + base system prompt)
+const EMPATHIQ_CONFIG_ID = "7fb3266e-a204-4f52-bd62-7c5f2da3bd92";
+
 async function humeGet(path: string, apiKey: string) {
   const res = await fetch(`https://api.hume.ai/v0/evi${path}`, {
     headers: { "X-Hume-Api-Key": apiKey },
@@ -37,11 +40,15 @@ router.get("/hume/config", async (req, res) => {
       name: (v.name as string) ?? "Unnamed voice",
     }));
 
-    res.json({ apiKey, configs, voices });
+    res.json({
+      apiKey,
+      configs,
+      voices,
+      defaultConfigId: EMPATHIQ_CONFIG_ID,
+    });
   } catch (err) {
     req.log.error({ err }, "Hume config fetch error");
-    // Still return apiKey even if listing fails
-    res.json({ apiKey, configs: [], voices: [] });
+    res.json({ apiKey, configs: [], voices: [], defaultConfigId: EMPATHIQ_CONFIG_ID });
   }
 });
 
