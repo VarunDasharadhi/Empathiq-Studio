@@ -203,7 +203,11 @@ function App() {
               <ChatInterface currentEmotion={faceEmotion} sessionId={sessionId} />
             )}
             {rightPanel === "voice" && (
-              <HumeVoiceMode onVoiceEmotion={handleVoiceEmotion} sessionId={sessionId} />
+              <HumeVoiceMode
+                onVoiceEmotion={handleVoiceEmotion}
+                sessionId={sessionId}
+                faceEmotionCounts={emotionCountRef.current}
+              />
             )}
             {rightPanel === "history" && (
               <SessionHistory
