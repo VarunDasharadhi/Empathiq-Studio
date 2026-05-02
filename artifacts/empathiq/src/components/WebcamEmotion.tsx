@@ -51,8 +51,42 @@ const VALUE_LABEL: Record<number, string> = {
 };
 
 interface TimelinePoint { t: number; value: number; emotion: string; }
-interface Props { onEmotionChange: (emotion: Emotion) => void; sessionId: number | null; }
+interface Props {
+  onEmotionChange: (emotion: Emotion) => void;
+  sessionId: number | null;
+  voiceEmotion?: string | null;
+  voiceEmotionScores?: Record<string, number> | null;
+}
 type Status = "loading-models" | "requesting-camera" | "ready" | "off" | "no-camera" | "error";
+
+const VOICE_EMOTION_COLORS: Record<string, string> = {
+  happy: "#facc15", sad: "#60a5fa", angry: "#f87171", fearful: "#c084fc",
+  disgusted: "#4ade80", surprised: "#fb923c", neutral: "#9ca3af",
+  joy: "#facc15", anxiety: "#c084fc", distress: "#60a5fa", pain: "#f87171",
+  calmness: "#4ade80", amusement: "#facc15", awe: "#67e8f9", confusion: "#9ca3af",
+  contempt: "#f87171", excited: "#fb923c",
+};
+
+const EMOTION_VALENCE: Record<string, "positive" | "negative" | "neutral"> = {
+  happy: "positive", surprised: "positive", joy: "positive", excited: "positive",
+  amusement: "positive", awe: "positive",
+  neutral: "neutral", calmness: "neutral", confusion: "neutral",
+  sad: "negative", angry: "negative", fearful: "negative", disgusted: "negative",
+  anxiety: "negative", distress: "negative", pain: "negative", contempt: "negative",
+};
+
+function getOverallLabel(face: string | null, voice: string | null): { label: string; color: string } {
+  if (!face && !voice) return { label: "No data", color: "#9ca3af" };
+  if (!voice) return { label: face!, color: EMOTION_CONFIG[face!]?.dot ?? "#9ca3af" };
+  if (!face) return { label: voice, color: VOICE_EMOTION_COLORS[voice.toLowerCase()] ?? "#9ca3af" };
+  if (face === voice) return { label: face, color: EMOTION_CONFIG[face]?.dot ?? "#9ca3af" };
+  const fv = EMOTION_VALENCE[face] ?? "neutral";
+  const vv = EMOTION_VALENCE[voice.toLowerCase()] ?? "neutral";
+  if (fv === "neutral") return { label: voice, color: VOICE_EMOTION_COLORS[voice.toLowerCase()] ?? "#9ca3af" };
+  if (vv === "neutral") return { label: face, color: EMOTION_CONFIG[face]?.dot ?? "#9ca3af" };
+  if (fv === vv) return { label: `${face} / ${voice}`, color: EMOTION_CONFIG[face]?.dot ?? "#9ca3af" };
+  return { label: "Mixed", color: "#fb923c" };
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CustomYTick = ({ x, y, payload }: any) => {
@@ -78,7 +112,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   );
 };
 
-export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
+export default function WebcamEmotion({ onEmotionChange, sessionId, voiceEmotion = null, voiceEmotionScores = null }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>("loading-models");
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion>(null);
@@ -359,38 +393,87 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
         )}
       </div>
 
-      {/* Emotion badge strip */}
-      <div className="flex-none h-14 flex items-center justify-between px-4 border-t border-border bg-card">
-        {emotionCfg && detectedEmotion ? (
-          <>
-            <div className={`emotion-badge flex items-center gap-2 px-3 py-1.5 rounded-full ring-1 ${emotionCfg.bg} ${emotionCfg.text} ${emotionCfg.ring}`}>
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: emotionCfg.dot, boxShadow: `0 0 6px ${emotionCfg.dot}` }} />
-              <span className="text-sm font-semibold">{emotionCfg.label}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Confidence</span>
-              <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${Math.round(confidence * 100)}%`, backgroundColor: emotionCfg.dot }}
-                />
+      {/* Emotion badge strip — shows combined face + voice when voice mode is active */}
+      <div className={`flex-none border-t border-border bg-card transition-all ${voiceEmotion ? "min-h-[72px] py-2" : "h-14"} flex flex-col justify-center px-4 gap-1.5`}>
+        {/* Face emotion row */}
+        <div className="flex items-center justify-between">
+          {emotionCfg && detectedEmotion ? (
+            <>
+              <div className="flex items-center gap-1.5">
+                {voiceEmotion && (
+                  <span className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wide w-8">Face</span>
+                )}
+                <div className={`emotion-badge flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ${emotionCfg.bg} ${emotionCfg.text} ${emotionCfg.ring}`}>
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: emotionCfg.dot, boxShadow: `0 0 5px ${emotionCfg.dot}` }} />
+                  <span className="text-xs font-semibold">{emotionCfg.label}</span>
+                </div>
               </div>
-              <span className="text-xs font-medium tabular-nums" style={{ color: emotionCfg.dot }}>
-                {Math.round(confidence * 100)}%
-              </span>
+              {!voiceEmotion && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Confidence</span>
+                  <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.round(confidence * 100)}%`, backgroundColor: emotionCfg.dot }} />
+                  </div>
+                  <span className="text-xs font-medium tabular-nums" style={{ color: emotionCfg.dot }}>{Math.round(confidence * 100)}%</span>
+                </div>
+              )}
+              {voiceEmotion && (
+                <div className="flex items-center gap-1">
+                  <span className="text-[9px] text-muted-foreground/40">{Math.round(confidence * 100)}%</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              {status === "ready" ? (
+                <><div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" /><span className="text-xs">Scanning for face…</span></>
+              ) : status === "off" ? (
+                <><div className="w-2 h-2 rounded-full bg-muted-foreground/40" /><span className="text-xs">Camera off</span></>
+              ) : (
+                <><div className="w-2 h-2 rounded-full bg-muted-foreground" /><span className="text-xs">{modelsLoaded ? "Starting…" : "Loading…"}</span></>
+              )}
             </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            {status === "ready" ? (
-              <><div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" /><span className="text-xs">Scanning for face…</span></>
-            ) : status === "off" ? (
-              <><div className="w-2 h-2 rounded-full bg-muted-foreground/40" /><span className="text-xs">Camera off — emotion paused</span></>
-            ) : (
-              <><div className="w-2 h-2 rounded-full bg-muted-foreground" /><span className="text-xs">{modelsLoaded ? "Camera starting…" : "Loading…"}</span></>
-            )}
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Voice emotion row + Overall — only in voice mode */}
+        {voiceEmotion && (() => {
+          const vColor = VOICE_EMOTION_COLORS[voiceEmotion.toLowerCase()] ?? "#9ca3af";
+          const overall = getOverallLabel(detectedEmotion as string | null, voiceEmotion);
+          return (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wide w-8">Voice</span>
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                    style={{ backgroundColor: `${vColor}18`, color: vColor, boxShadow: `0 0 0 1px ${vColor}35` }}
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: vColor, boxShadow: `0 0 5px ${vColor}` }} />
+                    <span className="capitalize">{voiceEmotion}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide">Overall</span>
+                  <div
+                    className="px-2 py-0.5 rounded-full text-[10px] font-bold capitalize"
+                    style={{ backgroundColor: `${overall.color}20`, color: overall.color }}
+                  >
+                    {overall.label}
+                  </div>
+                </div>
+              </div>
+              {/* Top voice emotion scores as micro-bar */}
+              {voiceEmotionScores && (
+                <div className="flex gap-0.5 h-1 rounded-full overflow-hidden mt-0.5">
+                  {Object.entries(voiceEmotionScores).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v]) => (
+                    <div key={k} className="flex-1 rounded-full" style={{ backgroundColor: VOICE_EMOTION_COLORS[k.toLowerCase()] ?? "#9ca3af", opacity: 0.4 + v * 0.6 }} title={`${k}: ${Math.round(v*100)}%`} />
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
 
       {/* Emotion timeline chart */}
