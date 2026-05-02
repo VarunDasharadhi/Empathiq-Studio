@@ -77,9 +77,18 @@ interface TranscriptEntry {
   receivedAt: Date;
 }
 
+interface VoiceSummary {
+  emotions: string;
+  themes: string;
+  coherenceScore: number;
+  coherenceNote: string;
+  takeaway: string;
+}
+
 interface Props {
   onVoiceEmotion: (emotion: string | null, scores: Record<string, number> | null) => void;
   sessionId: number | null;
+  faceEmotionCounts: Record<string, number>;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -99,12 +108,137 @@ function getDominantEmotion(scores: Record<string, number>): { label: string; sc
   return { label, score };
 }
 
-// Guess voice gender from name heuristics
 function voiceMatchesGender(name: string, gender: Gender): boolean {
   const lower = name.toLowerCase();
   if (gender === "male")   return /\b(male|man|men|guy|masculine|bass|baritone|ivo|orion|adam|sam)\b/.test(lower);
   if (gender === "female") return /\b(female|woman|women|girl|feminine|soprano|alto|kora|aura|ito|dacher)\b/.test(lower);
   return true;
+}
+
+// ── Coherence score ring ───────────────────────────────────────────────────
+function CoherenceRing({ score }: { score: number }) {
+  const r = 34;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+
+  const { color, bg, label } =
+    score >= 75 ? { color: "#4ade80", bg: "#4ade8018", label: "High Coherence" }
+    : score >= 50 ? { color: "#fbbf24", bg: "#fbbf2418", label: "Partial Alignment" }
+    : { color: "#c084fc", bg: "#c084fc18", label: "Emotionally Complex" };
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative w-20 h-20">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
+          <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="7" />
+          <circle
+            cx="40" cy="40" r={r} fill="none"
+            stroke={color} strokeWidth="7"
+            strokeDasharray={`${dash} ${circ}`}
+            strokeLinecap="round"
+            style={{ filter: `drop-shadow(0 0 6px ${color}80)`, transition: "stroke-dasharray 1.2s cubic-bezier(.4,0,.2,1)" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center"
+          style={{ backgroundColor: bg, borderRadius: "50%" }}>
+          <span className="text-xl font-bold leading-none" style={{ color }}>{score}</span>
+          <span className="text-[8px] text-muted-foreground/60 leading-none mt-0.5">/ 100</span>
+        </div>
+      </div>
+      <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color }}>{label}</span>
+    </div>
+  );
+}
+
+// ── Session summary card ───────────────────────────────────────────────────
+function VoiceSummaryCard({
+  summary, persona, messageCount, onClose, onNewSession,
+}: {
+  summary: VoiceSummary;
+  persona: Persona;
+  messageCount: number;
+  onClose: () => void;
+  onNewSession: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col bg-background/95 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-y-auto">
+      {/* Header */}
+      <div className="flex-none flex items-center justify-between px-5 py-4 border-b border-white/8">
+        <div>
+          <p className="text-sm font-bold text-foreground">Session Complete</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{persona.emoji} {persona.label} · {messageCount} exchanges</p>
+        </div>
+        <button onClick={onClose}
+          className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-muted-foreground transition-colors text-sm">
+          ✕
+        </button>
+      </div>
+
+      {/* Coherence score */}
+      <div className="flex-none flex flex-col items-center py-6 px-5 gap-3">
+        <CoherenceRing score={summary.coherenceScore} />
+        <div className="text-center">
+          <p className="text-xs text-muted-foreground/70 italic">{summary.coherenceNote}</p>
+          <p className="text-[9px] text-muted-foreground/40 mt-1">How well your face & voice emotions aligned</p>
+        </div>
+      </div>
+
+      {/* Cards */}
+      <div className="flex-none flex flex-col gap-3 px-5 pb-5">
+        {/* Emotional arc */}
+        <div className="rounded-2xl p-4 border border-white/8" style={{ background: `${persona.color}0a` }}>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs"
+              style={{ backgroundColor: `${persona.color}25` }}>🌊</div>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Emotional Arc</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">{summary.emotions}</p>
+        </div>
+
+        {/* Key themes */}
+        <div className="rounded-2xl p-4 border border-white/8 bg-white/3">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-5 h-5 rounded-full bg-white/8 flex items-center justify-center text-xs">💬</div>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Key Themes</span>
+          </div>
+          <p className="text-sm text-foreground/90 leading-relaxed">{summary.themes}</p>
+        </div>
+
+        {/* Takeaway */}
+        <div className="rounded-2xl p-4 border bg-gradient-to-br from-primary/8 to-violet-500/5"
+          style={{ borderColor: `${persona.color}25` }}>
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs"
+              style={{ backgroundColor: `${persona.color}20` }}>✨</div>
+            <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: `${persona.color}99` }}>Your Takeaway</span>
+          </div>
+          <p className="text-sm font-medium leading-relaxed" style={{ color: persona.color }}>{summary.takeaway}</p>
+        </div>
+
+        {/* Emotion breakdown */}
+        <div className="rounded-2xl p-4 border border-white/8 bg-white/2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/40 block mb-3">Saved to session history</span>
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
+            <span className="text-xs text-muted-foreground/60">Summary & transcript stored in History tab</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex-none px-5 pb-5 flex gap-2.5">
+        <button onClick={onClose}
+          className="flex-1 py-2.5 rounded-xl bg-white/6 hover:bg-white/10 text-sm font-medium text-muted-foreground transition-colors border border-white/8">
+          Back to Voice
+        </button>
+        <button onClick={onNewSession}
+          className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+          style={{ backgroundColor: `${persona.color}20`, color: persona.color, boxShadow: `0 0 0 1px ${persona.color}40` }}>
+          New Session
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ── Dual-source FFT visualizer ─────────────────────────────────────────────
@@ -192,7 +326,6 @@ function GenderVoiceSelector({
 
   return (
     <div className="flex items-center gap-2 px-4 pb-2.5">
-      {/* Gender pills */}
       <div className="flex gap-1 flex-shrink-0">
         {GENDER_OPTIONS.map((g) => {
           const isActive = gender === g.value;
@@ -214,7 +347,6 @@ function GenderVoiceSelector({
         })}
       </div>
 
-      {/* Voice selector */}
       {displayVoices.length > 0 ? (
         <select
           value={selectedVoiceId ?? ""}
@@ -282,13 +414,14 @@ function StatusBadge({ readyState, error }: { readyState: VoiceReadyState; error
 
 // ── Inner component (must be child of VoiceProvider) ──────────────────────
 function VoiceModeInner({
-  apiKey, configs, voices, onVoiceEmotion, sessionId,
+  apiKey, configs, voices, onVoiceEmotion, sessionId, faceEmotionCounts,
 }: {
   apiKey: string;
   configs: EVIConfig[];
   voices: EVIVoice[];
   onVoiceEmotion: Props["onVoiceEmotion"];
   sessionId: number | null;
+  faceEmotionCounts: Record<string, number>;
 }) {
   const {
     connect, disconnect, readyState, messages,
@@ -302,6 +435,9 @@ function VoiceModeInner({
   const [gender, setGender]                   = useState<Gender>("neutral");
   const [selectedConfigId, setSelectedConfig] = useState<string | null>(configs[0]?.id ?? null);
   const [selectedVoiceId, setSelectedVoice]   = useState<string | null>(null);
+  const [voiceEmotionCounts, setVoiceEmotionCounts] = useState<Record<string, number>>({});
+  const [summary, setSummary]                 = useState<VoiceSummary | null>(null);
+  const [summaryLoading, setSummaryLoading]   = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const connectRef = useRef(false);
   const prevLenRef = useRef(0);
@@ -327,10 +463,39 @@ function VoiceModeInner({
     if (connectRef.current) return;
     connectRef.current = true;
     doConnect({ persona: PERSONAS[0], configId: configs[0]?.id ?? null, voiceId: null })
-      .catch(() => {}); // error shown via status
+      .catch(() => {});
     return () => { disconnect(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── End session + generate summary ───────────────────────────────────────
+  const handleEndSession = useCallback(async () => {
+    if (!sessionId || transcript.length === 0) return;
+    setSummaryLoading(true);
+    if (readyState === VoiceReadyState.OPEN) {
+      try { await disconnect(); } catch { /* ignore */ }
+    }
+    try {
+      // Patch session as ended
+      await fetch(`/api/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${persona.emoji} ${persona.label} voice session`,
+          dominantEmotion: Object.entries(voiceEmotionCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
+        }),
+      });
+      // Generate voice summary
+      const res = await fetch(`/api/sessions/${sessionId}/voice-summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceEmotionCounts, faceEmotionCounts }),
+      });
+      const data = await res.json() as { summary: VoiceSummary | null };
+      if (data.summary) setSummary(data.summary);
+    } catch { /* non-critical */ }
+    setSummaryLoading(false);
+  }, [sessionId, transcript.length, readyState, disconnect, persona, voiceEmotionCounts, faceEmotionCounts]);
 
   // ── Persona change → disconnect + reconnect ──────────────────────────────
   const handlePersonaChange = useCallback(async (p: Persona) => {
@@ -338,10 +503,9 @@ function VoiceModeInner({
     setPersona(p);
     clearMessages();
     setTranscript([]);
+    setSummary(null);
     prevLenRef.current = 0;
-    if (readyState === VoiceReadyState.OPEN) {
-      await disconnect();
-    }
+    if (readyState === VoiceReadyState.OPEN) await disconnect();
     await doConnect({ persona: p, configId: selectedConfigId, voiceId: selectedVoiceId });
   }, [persona.id, readyState, disconnect, doConnect, selectedConfigId, selectedVoiceId, clearMessages]);
 
@@ -350,12 +514,13 @@ function VoiceModeInner({
     setSelectedConfig(configId);
     clearMessages();
     setTranscript([]);
+    setSummary(null);
     prevLenRef.current = 0;
     if (readyState === VoiceReadyState.OPEN) await disconnect();
     await doConnect({ persona, configId, voiceId: selectedVoiceId });
   }, [readyState, disconnect, doConnect, persona, selectedVoiceId, clearMessages]);
 
-  // ── Voice ID change → send session settings live (no reconnect needed) ───
+  // ── Voice ID change → live session settings update ───────────────────────
   const handleVoiceChange = useCallback((voiceId: string | null) => {
     setSelectedVoice(voiceId);
     if (readyState === VoiceReadyState.OPEN) {
@@ -363,19 +528,16 @@ function VoiceModeInner({
     }
   }, [readyState, sendSessionSettings]);
 
-  // ── Gender change → auto-pick matching voice, live-update ────────────────
+  // ── Gender change → auto-pick matching voice ─────────────────────────────
   const handleGenderChange = useCallback((g: Gender) => {
     setGender(g);
-    if (g === "neutral") {
-      handleVoiceChange(null);
-      return;
-    }
+    if (g === "neutral") { handleVoiceChange(null); return; }
     const match = voices.find((v) => voiceMatchesGender(v.name, g));
     if (match) handleVoiceChange(match.id);
-    else        handleVoiceChange(null); // no match — default voice used
+    else        handleVoiceChange(null);
   }, [voices, handleVoiceChange]);
 
-  // ── Parse messages into transcript + extract voice emotion ────────────────
+  // ── Parse messages → transcript + voice emotion counts ───────────────────
   useEffect(() => {
     const jsonMsgs = messages.filter(
       (m): m is JSONMessage =>
@@ -386,6 +548,8 @@ function VoiceModeInner({
     );
 
     const entries: TranscriptEntry[] = [];
+    const vCounts: Record<string, number> = {};
+
     for (const m of jsonMsgs) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const mm = m as any;
@@ -397,7 +561,9 @@ function VoiceModeInner({
         const scores: Record<string, number> = mm.models?.prosody?.scores ?? {};
         entries.push({ id: `u-${String(mm.receivedAt)}`, role: "user", content, emotions: Object.keys(scores).length ? scores : undefined, receivedAt: mm.receivedAt ?? new Date() });
         if (Object.keys(scores).length) {
-          onVoiceEmotion(getDominantEmotion(scores).label, scores);
+          const dom = getDominantEmotion(scores);
+          onVoiceEmotion(dom.label, scores);
+          vCounts[dom.label] = (vCounts[dom.label] ?? 0) + 1;
         }
       } else if (type === "assistant_message") {
         const content: string = mm.message?.content ?? "";
@@ -406,6 +572,7 @@ function VoiceModeInner({
       }
     }
     setTranscript(entries);
+    setVoiceEmotionCounts(vCounts);
   }, [messages, onVoiceEmotion]);
 
   // ── Save new transcript entries to session ────────────────────────────────
@@ -425,9 +592,44 @@ function VoiceModeInner({
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [transcript]);
 
   const isOpen = readyState === VoiceReadyState.OPEN;
+  const userMsgCount = transcript.filter((t) => t.role === "user").length;
 
   return (
-    <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
+    <div className="relative flex flex-col h-full bg-background/60 backdrop-blur-sm">
+
+      {/* ── Session summary overlay ──────────────────────────────────────── */}
+      {summary && (
+        <VoiceSummaryCard
+          summary={summary}
+          persona={persona}
+          messageCount={userMsgCount}
+          onClose={() => setSummary(null)}
+          onNewSession={() => {
+            setSummary(null);
+            clearMessages();
+            setTranscript([]);
+            setVoiceEmotionCounts({});
+            prevLenRef.current = 0;
+            doConnect({ persona, configId: selectedConfigId, voiceId: selectedVoiceId }).catch(() => {});
+          }}
+        />
+      )}
+
+      {/* ── Generating overlay ───────────────────────────────────────────── */}
+      {summaryLoading && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-background/90 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
+            <div className="absolute inset-2 rounded-full border border-violet-400/20 border-t-violet-400 animate-spin" style={{ animationDuration: "1.5s", animationDirection: "reverse" }} />
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-semibold text-foreground">Analysing your session…</p>
+            <p className="text-xs text-muted-foreground mt-1">Comparing face & voice emotions · Generating insights</p>
+          </div>
+        </div>
+      )}
+
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex-none flex items-center justify-between px-4 py-3 border-b border-white/8 bg-black/20">
         <div>
@@ -437,7 +639,6 @@ function VoiceModeInner({
           <p className="text-xs text-muted-foreground mt-0.5">EVI · Empathic Voice Interface</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* EVI config dropdown (only when multiple configs exist) */}
           {configs.length > 1 && (
             <select
               value={selectedConfigId ?? ""}
@@ -479,7 +680,7 @@ function VoiceModeInner({
         </div>
       )}
 
-      {/* ── Error / Connecting / Empty states ───────────────────────────── */}
+      {/* ── Error state ─────────────────────────────────────────────────── */}
       {status.value === "error" && (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
           <div className="w-14 h-14 rounded-2xl bg-red-500/10 flex items-center justify-center text-2xl">🎙</div>
@@ -495,6 +696,7 @@ function VoiceModeInner({
         </div>
       )}
 
+      {/* ── Connecting state ─────────────────────────────────────────────── */}
       {readyState === VoiceReadyState.CONNECTING && status.value !== "error" && (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <div className="relative w-16 h-16">
@@ -578,7 +780,24 @@ function VoiceModeInner({
           <div className="w-1 h-1 rounded-full opacity-60" style={{ backgroundColor: persona.color }} />
           <span className="text-[10px] text-muted-foreground/50">Vocal emotions by Hume EVI · Face by face-api.js</span>
         </div>
-        {isOpen && (
+
+        {/* End session button — visible once conversation has started */}
+        {userMsgCount > 0 && !summaryLoading && (
+          <button
+            onClick={handleEndSession}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all hover:scale-[1.03]"
+            style={{
+              backgroundColor: `${persona.color}18`,
+              color: persona.color,
+              boxShadow: `0 0 0 1px ${persona.color}35`,
+            }}
+          >
+            <span>✦</span>
+            <span>End &amp; Summarise</span>
+          </button>
+        )}
+
+        {isOpen && userMsgCount === 0 && (
           <div className="flex items-center gap-1.5">
             <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" className="text-muted-foreground/30">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -592,7 +811,7 @@ function VoiceModeInner({
 }
 
 // ── Public wrapper — fetches config then mounts VoiceProvider ──────────────
-export default function HumeVoiceMode({ onVoiceEmotion, sessionId }: Props) {
+export default function HumeVoiceMode({ onVoiceEmotion, sessionId, faceEmotionCounts }: Props) {
   const [humeConfig, setHumeConfig] = useState<HumeConfig | null>(null);
   const [fetchError, setFetchError] = useState(false);
 
@@ -634,6 +853,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, sessionId }: Props) {
         voices={humeConfig.voices}
         onVoiceEmotion={onVoiceEmotion}
         sessionId={sessionId}
+        faceEmotionCounts={faceEmotionCounts}
       />
     </VoiceProvider>
   );
