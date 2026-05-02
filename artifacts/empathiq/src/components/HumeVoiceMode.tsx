@@ -57,6 +57,62 @@ const PERSONAS: Persona[] = [
       "Offer breathwork, body scans, and grounding techniques. " +
       "Your language is spacious and calming. Help them arrive in the present moment.",
   },
+  {
+    id: "smart-glasses",
+    label: "Smart Glasses",
+    emoji: "🥽",
+    color: "#a78bfa",
+    glow: "rgba(167,139,250,0.5)",
+    systemPrompt:
+      "In this session you are a real-time social assistant in the user's ear. " +
+      "They are wearing smart glasses and describing what they see. " +
+      "Give whispered, short, actionable coaching — what to say, how to respond, what the other person's emotion likely means. " +
+      "Be fast, precise, and invisible like a silent expert.",
+  },
+  {
+    id: "anger-release",
+    label: "Anger Release",
+    emoji: "😤",
+    color: "#f87171",
+    glow: "rgba(248,113,113,0.5)",
+    systemPrompt:
+      "In this session you are a safe space for the user to vent. " +
+      "Let them speak freely. Validate everything without judgment. " +
+      "Reflect their intensity back calmly. Help them process and decompress. Never rush them.",
+  },
+  {
+    id: "focus-coach",
+    label: "Focus Coach",
+    emoji: "🎯",
+    color: "#fbbf24",
+    glow: "rgba(251,191,36,0.5)",
+    systemPrompt:
+      "In this session you are a sharp productivity coach. " +
+      "Keep your responses short and direct. Help the user stay in flow, cut distractions, and execute. " +
+      "Match their energy — push when they're slow, calm when they're overwhelmed.",
+  },
+  {
+    id: "sleep-guide",
+    label: "Sleep Guide",
+    emoji: "🌙",
+    color: "#818cf8",
+    glow: "rgba(99,102,241,0.5)",
+    systemPrompt:
+      "In this session you are a sleep companion. " +
+      "Speak slowly, warmly, and hypnotically. Guide the user toward rest using breathing exercises, body scans, and calming storytelling. " +
+      "Never rush. Your voice should feel like dusk settling into night.",
+  },
+  {
+    id: "confidence-booster",
+    label: "Confidence Booster",
+    emoji: "💪",
+    color: "#fb923c",
+    glow: "rgba(251,146,60,0.5)",
+    systemPrompt:
+      "In this session you are a hype coach. " +
+      "Read the user's energy — if they're low, lift them with conviction and warmth. " +
+      "Speak with power and belief. Help them step into their best self before a big moment.",
+  },
 ];
 
 // ── Gender configs ─────────────────────────────────────────────────────────
@@ -251,7 +307,7 @@ function VoiceSummaryCard({
 // ── Pre-connect setup screen ───────────────────────────────────────────────
 function SetupScreen({
   persona, gender, voices, selectedVoiceId, configs, selectedConfigId,
-  onPersona, onGender, onVoice, onConfig, onStart,
+  onPersona, onGender, onVoice, onConfig, onStart, isStarting, startError,
 }: {
   persona: Persona;
   gender: Gender;
@@ -264,6 +320,8 @@ function SetupScreen({
   onVoice: (id: string | null) => void;
   onConfig: (id: string | null) => void;
   onStart: () => void;
+  isStarting: boolean;
+  startError: string | null;
 }) {
   const hasVoices = voices.length > 0;
   const filteredVoices = hasVoices
@@ -376,19 +434,34 @@ function SetupScreen({
 
       {/* Start button */}
       <div className="flex-none px-5 py-4 border-t border-white/6">
-        <button onClick={onStart}
-          className="w-full py-3 rounded-2xl text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99]"
+        {startError && (
+          <div className="mb-3 flex items-start gap-2 bg-red-500/10 border border-red-500/25 rounded-xl px-3 py-2.5">
+            <span className="text-red-400 text-base leading-none mt-0.5">⚠</span>
+            <p className="text-[11px] text-red-300 leading-relaxed">{startError}</p>
+          </div>
+        )}
+        <button onClick={onStart} disabled={isStarting}
+          className="w-full py-3 rounded-2xl text-sm font-bold transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed hover:scale-[1.01] active:scale-[0.99]"
           style={{
             backgroundColor: `${persona.color}22`,
             color: persona.color,
             boxShadow: `0 0 0 1.5px ${persona.color}, 0 0 20px ${persona.glow}`,
           }}>
-          <span className="text-base">{persona.emoji}</span>
-          Start {persona.label} Session
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+          {isStarting ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              Connecting…
+            </>
+          ) : (
+            <>
+              <span className="text-base">{persona.emoji}</span>
+              Start {persona.label} Session
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+            </>
+          )}
         </button>
         <p className="text-[10px] text-center text-muted-foreground/40 mt-2">
-          Microphone will activate when you click Start
+          {isStarting ? "Requesting microphone access…" : "Microphone will activate when you click Start"}
         </p>
       </div>
     </div>
@@ -568,6 +641,8 @@ function VoiceModeInner({
 
   // ── State ───────────────────────────────────────────────────────────────
   const [hasStarted, setHasStarted]           = useState(false);
+  const [isStarting, setIsStarting]           = useState(false);
+  const [startError, setStartError]           = useState<string | null>(null);
   const [transcript, setTranscript]           = useState<TranscriptEntry[]>([]);
   const [persona, setPersona]                 = useState<Persona>(PERSONAS[0]);
   const [gender, setGender]                   = useState<Gender>("neutral");
@@ -578,6 +653,7 @@ function VoiceModeInner({
   const [summaryLoading, setSummaryLoading]   = useState(false);
   const bottomRef  = useRef<HTMLDivElement>(null);
   const prevLenRef = useRef(0);
+  const connectingRef = useRef(false);
 
   const isOpen = readyState === VoiceReadyState.OPEN;
   const isConnecting = readyState === VoiceReadyState.CONNECTING;
@@ -605,19 +681,41 @@ function VoiceModeInner({
   // ── Handlers ────────────────────────────────────────────────────────────
 
   const handleStart = useCallback(async () => {
-    setHasStarted(true);
-    await doConnect({ persona, configId: selectedConfigId, voiceId: selectedVoiceId });
-  }, [doConnect, persona, selectedConfigId, selectedVoiceId]);
+    if (isStarting || connectingRef.current) return;
+    setStartError(null);
+    setIsStarting(true);
+    connectingRef.current = true;
+    try {
+      await doConnect({ persona, configId: selectedConfigId, voiceId: selectedVoiceId });
+      setHasStarted(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to start voice session";
+      const isMic = msg.toLowerCase().includes("permission") || msg.toLowerCase().includes("microphone") || msg.toLowerCase().includes("notallowed");
+      setStartError(isMic ? "Microphone access was denied. Please allow microphone access in your browser and try again." : `Connection failed: ${msg}`);
+    } finally {
+      setIsStarting(false);
+      connectingRef.current = false;
+    }
+  }, [isStarting, doConnect, persona, selectedConfigId, selectedVoiceId]);
 
   // Persona change mid-session — reconnect with new prompt
   const handlePersonaChange = useCallback(async (p: Persona) => {
     if (p.id === persona.id) return;
+    if (connectingRef.current) return;
     setPersona(p);
     if (!hasStarted) return;
+    connectingRef.current = true;
     clearMessages(); setTranscript([]); prevLenRef.current = 0;
-    if (isOpen) await disconnect();
-    await doConnect({ persona: p, configId: selectedConfigId, voiceId: selectedVoiceId });
-  }, [persona.id, hasStarted, isOpen, disconnect, doConnect, selectedConfigId, selectedVoiceId, clearMessages]);
+    try {
+      if (isOpen || isConnecting) {
+        try { await disconnect(); } catch { /* ignore */ }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      await doConnect({ persona: p, configId: selectedConfigId, voiceId: selectedVoiceId });
+    } catch { /* ignore mid-session reconnect errors */ } finally {
+      connectingRef.current = false;
+    }
+  }, [persona.id, hasStarted, isOpen, isConnecting, disconnect, doConnect, selectedConfigId, selectedVoiceId, clearMessages]);
 
   // Voice ID change — update live via sendSessionSettings (takes effect on next EVI reply)
   const handleVoiceChange = useCallback((voiceId: string | null) => {
@@ -732,6 +830,8 @@ function VoiceModeInner({
         onPersona={setPersona} onGender={setGender}
         onVoice={setSelectedVoice} onConfig={setSelectedConfig}
         onStart={handleStart}
+        isStarting={isStarting}
+        startError={startError}
       />
     );
   }
