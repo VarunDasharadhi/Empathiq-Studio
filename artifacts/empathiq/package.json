@@ -74,8 +74,5 @@
     "wouter": "^3.3.5",
     "zod": "catalog:"
   },
-  "dependencies": {
-    "@humeai/voice-react": "^0.2.14",
-    "hume": "^0.15.16"
-  }
+  "dependencies": {}
 }
