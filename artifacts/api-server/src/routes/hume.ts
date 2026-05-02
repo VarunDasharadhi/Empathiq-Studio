@@ -5,9 +5,10 @@ const router: IRouter = Router();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Voice options: ITO = masculine, KORA = feminine
+// v2 suffix forces config recreation with updated eou_sensitivity setting
 const VOICE_OPTIONS = {
-  masculine: { name: "ITO",  configKey: "EmpathIQ-ITO" },
-  feminine:  { name: "KORA", configKey: "EmpathIQ-KORA" },
+  masculine: { name: "ITO",  configKey: "EmpathIQ-ITO-v2" },
+  feminine:  { name: "KORA", configKey: "EmpathIQ-KORA-v2" },
 } as const;
 type VoiceGender = keyof typeof VOICE_OPTIONS;
 
@@ -49,6 +50,12 @@ async function getOrCreateEviConfig(
         language_model: { model_provider: "ANTHROPIC", model_resource: "claude-sonnet-4-20250514" },
         voice: { provider: "HUME_AI", name: voiceName },
         system_prompt: SYSTEM_PROMPT,
+        // Wait 3 s of silence before EVI thinks the user is done speaking
+        eou_sensitivity: "LOW",
+        timeouts: {
+          inactivity: { enabled: true, duration_secs: 30 },
+          max_duration: { enabled: true, duration_secs: 1800 },
+        },
       }),
     });
     if (!createRes.ok) {

@@ -5,6 +5,7 @@ import ChatInterface from "@/components/ChatInterface";
 import SessionHistory, { type Session } from "@/components/SessionHistory";
 import SessionReplay from "@/components/SessionReplay";
 import HumeVoiceMode from "@/components/HumeVoiceMode";
+import SmartGlassesPanel from "@/components/SmartGlassesPanel";
 
 const queryClient = new QueryClient();
 
@@ -12,7 +13,7 @@ export type Emotion =
   | "happy" | "sad" | "angry" | "fearful"
   | "disgusted" | "surprised" | "neutral" | null;
 
-type RightPanel = "chat" | "history" | "replay" | "voice";
+type RightPanel = "chat" | "voice" | "glasses" | "history" | "replay";
 
 const EMOTION_VALENCE: Record<string, "positive" | "negative" | "neutral"> = {
   happy: "positive", surprised: "positive", joy: "positive", excited: "positive",
@@ -35,6 +36,13 @@ export function getOverallEmotion(face: string | null, voice: string | null): st
   return "mixed";
 }
 
+const NAV_TABS: Array<{ id: RightPanel; emoji: string; label: string; color: string }> = [
+  { id: "chat",    emoji: "💬", label: "Chat",         color: "#8b5cf6" },
+  { id: "voice",   emoji: "🎙️", label: "Voice",        color: "#a78bfa" },
+  { id: "glasses", emoji: "🥽", label: "Smart Glasses", color: "#34d399" },
+  { id: "history", emoji: "📜", label: "History",       color: "#f59e0b" },
+];
+
 function App() {
   const [faceEmotion, setFaceEmotion] = useState<Emotion>(null);
   const [voiceEmotion, setVoiceEmotion] = useState<string | null>(null);
@@ -43,7 +51,8 @@ function App() {
   const [rightPanel, setRightPanel] = useState<RightPanel>("chat");
   const [replaySession, setReplaySession] = useState<Session | null>(null);
   const [checkIn, setCheckIn] = useState<{ id: string; text: string } | null>(null);
-  const [isGlassesMode, setIsGlassesMode] = useState(false);
+  const [coachingText, setCoachingText] = useState<string | null>(null);
+  const [coachingLoading, setCoachingLoading] = useState(false);
   const emotionCountRef = useRef<Record<string, number>>({});
 
   const createSession = useCallback(async () => {
@@ -82,10 +91,6 @@ function App() {
     setVoiceEmotionScores(scores);
   }, []);
 
-  const handleModeChange = useCallback((modeId: string) => {
-    setIsGlassesMode(modeId === "smart-glasses");
-  }, []);
-
   const handleSustainedNegative = useCallback(async (emotion: string, durationSeconds: number) => {
     if (rightPanel !== "chat") return;
     try {
@@ -119,94 +124,85 @@ function App() {
     setRightPanel("history");
   }, []);
 
-  const handleVoiceToggle = useCallback(async () => {
-    if (rightPanel === "voice") {
-      setRightPanel("chat");
+  const handleCoachingText = useCallback((text: string) => {
+    setCoachingText(text);
+    setCoachingLoading(false);
+  }, []);
+
+  // When entering glasses tab, reset coaching state
+  useEffect(() => {
+    if (rightPanel === "glasses") {
+      setCoachingText(null);
+      setCoachingLoading(true);
+    } else if (rightPanel === "voice") {
       setVoiceEmotion(null);
       setVoiceEmotionScores(null);
-    } else {
-      setRightPanel("voice");
     }
   }, [rightPanel]);
+
+  const activeTab = rightPanel === "replay" ? "history" : rightPanel;
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex flex-col h-full w-full overflow-hidden app-gradient-bg">
-        {/* Header bar */}
-        <div className="relative flex-none flex items-center justify-between px-5 py-3 border-b border-white/8 bg-black/20 backdrop-blur-md z-10">
-          {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="logo-glow w-8 h-8 rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/20 border border-primary/30 flex items-center justify-center">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-primary">
-                <path d="M12 20.5c-5.25-4.8-10-9-10-13A5 5 0 0 1 12 4.93 5 5 0 0 1 22 7.5c0 4-4.75 8.2-10 13z" fill="currentColor" opacity="0.85" />
-                <path d="M9 9c0-1.1.9-2 2-2s2 .9 2 2" stroke="hsl(var(--primary-foreground))" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.6"/>
-              </svg>
+
+        {/* ── Nav bar ── */}
+        <div className="flex-none bg-black/30 backdrop-blur-md z-10 border-b border-white/8">
+          {/* Brand row */}
+          <div className="flex items-center justify-between px-5 py-2">
+            <div className="flex items-center gap-2.5">
+              <div className="logo-glow w-7 h-7 rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/20 border border-primary/30 flex items-center justify-center">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="text-primary">
+                  <path d="M12 20.5c-5.25-4.8-10-9-10-13A5 5 0 0 1 12 4.93 5 5 0 0 1 22 7.5c0 4-4.75 8.2-10 13z" fill="currentColor" opacity="0.85" />
+                  <path d="M9 9c0-1.1.9-2 2-2s2 .9 2 2" stroke="hsl(var(--primary-foreground))" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.6" />
+                </svg>
+              </div>
+              <div className="flex flex-col leading-none">
+                <span className="text-xs font-bold tracking-wide text-foreground">EmpathIQ</span>
+                <span className="text-[8px] text-muted-foreground/60 tracking-widest uppercase mt-0.5">Emotional AI</span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-bold tracking-wide text-foreground leading-none">EmpathIQ</span>
-              <span className="text-[9px] text-muted-foreground/70 leading-none mt-0.5 tracking-wider uppercase">Emotional AI</span>
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-primary/8">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              <span className="text-[10px] text-primary/80 font-medium">Live</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
-            {/* Chat tab */}
-            <button
-              onClick={() => { setRightPanel("chat"); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                rightPanel === "chat"
-                  ? "bg-primary/15 text-primary shadow-sm shadow-primary/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              Chat
-            </button>
+          {/* Tab row */}
+          <div className="flex items-stretch px-1">
+            {NAV_TABS.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    if (tab.id === "history") { setReplaySession(null); }
+                    setRightPanel(tab.id);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold relative transition-all"
+                  style={{
+                    color: isActive ? tab.color : "rgba(156,163,175,0.7)",
+                  }}
+                >
+                  <span className="text-sm leading-none">{tab.emoji}</span>
+                  <span className="hidden sm:inline">{tab.label}</span>
 
-            {/* Voice Mode tab */}
-            <button
-              onClick={handleVoiceToggle}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                rightPanel === "voice"
-                  ? "bg-violet-500/20 text-violet-300 shadow-sm shadow-violet-500/20"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-              {rightPanel === "voice" ? "Exit Voice" : "Voice Mode"}
-            </button>
-
-            {/* History tab */}
-            <button
-              onClick={() => { setRightPanel("history"); setReplaySession(null); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                rightPanel === "history" || rightPanel === "replay"
-                  ? "bg-primary/15 text-primary shadow-sm shadow-primary/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
-              }`}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-              </svg>
-              History
-            </button>
-
-            <div className="w-px h-4 bg-white/10 mx-1" />
-
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-primary/8">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs text-primary/80 font-medium">Live</span>
-            </div>
+                  {/* Glowing underline */}
+                  <div
+                    className="absolute bottom-0 left-1 right-1 h-[2px] rounded-full transition-all duration-300"
+                    style={{
+                      backgroundColor: isActive ? tab.color : "transparent",
+                      boxShadow: isActive ? `0 0 8px ${tab.color}` : "none",
+                      opacity: isActive ? 1 : 0,
+                    }}
+                  />
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Split layout */}
+        {/* ── Split layout ── */}
         <div className="flex flex-1 min-h-0">
           {/* Left — webcam + emotion detection */}
           <div className="w-1/2 h-full border-r border-white/8 flex flex-col">
@@ -216,11 +212,13 @@ function App() {
               sessionId={sessionId}
               voiceEmotion={voiceEmotion}
               voiceEmotionScores={voiceEmotionScores}
-              glassesMode={isGlassesMode}
+              glassesMode={rightPanel === "glasses"}
+              activateGlasses={rightPanel === "glasses"}
+              onCoachingText={handleCoachingText}
             />
           </div>
 
-          {/* Right — chat / voice / history */}
+          {/* Right — panel */}
           <div className="w-1/2 h-full flex flex-col">
             {rightPanel === "chat" && (
               <ChatInterface
@@ -228,7 +226,7 @@ function App() {
                 sessionId={sessionId}
                 checkIn={checkIn}
                 onDismissCheckIn={() => setCheckIn(null)}
-                onModeChange={handleModeChange}
+                onModeChange={() => {}}
               />
             )}
             {rightPanel === "voice" && (
@@ -237,6 +235,14 @@ function App() {
                 onExitVoice={() => { setRightPanel("chat"); setVoiceEmotion(null); setVoiceEmotionScores(null); }}
                 sessionId={sessionId}
                 faceEmotionCounts={emotionCountRef.current}
+              />
+            )}
+            {rightPanel === "glasses" && (
+              <SmartGlassesPanel
+                detectedEmotion={faceEmotion}
+                coachingText={coachingText}
+                coachingLoading={coachingLoading}
+                sessionId={sessionId}
               />
             )}
             {rightPanel === "history" && (

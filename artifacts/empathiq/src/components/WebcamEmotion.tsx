@@ -61,6 +61,8 @@ interface Props {
   voiceEmotion?: string | null;
   voiceEmotionScores?: Record<string, number> | null;
   glassesMode?: boolean;
+  activateGlasses?: boolean;
+  onCoachingText?: (text: string) => void;
 }
 type Status = "loading-models" | "requesting-camera" | "ready" | "off" | "no-camera" | "error";
 
@@ -117,7 +119,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   );
 };
 
-export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null, glassesMode = false }: Props) {
+export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null, glassesMode = false, activateGlasses = false, onCoachingText }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>("loading-models");
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion>(null);
@@ -146,9 +148,12 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
   const negativeStreakRef = useRef(0);
   const sustainedEmotionRef = useRef<string | null>(null);
   const onSustainedNegativeRef = useRef(onSustainedNegative);
+  const onCoachingTextRef = useRef(onCoachingText);
   const glassesActiveRef = useRef(false);
   const coachingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const toggleGlassesViewRef = useRef<() => Promise<void>>(() => Promise.resolve());
   useEffect(() => { onSustainedNegativeRef.current = onSustainedNegative; }, [onSustainedNegative]);
+  useEffect(() => { onCoachingTextRef.current = onCoachingText; }, [onCoachingText]);
 
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   useEffect(() => { voiceEmotionRef.current = voiceEmotion; }, [voiceEmotion]);
@@ -297,6 +302,7 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
       if (data.coaching && glassesActiveRef.current) {
         setCoachingText(data.coaching);
         setCoachingKey((k) => k + 1);
+        onCoachingTextRef.current?.(data.coaching);
       }
     } catch { /* non-critical */ } finally {
       setCoachingLoading(false);
@@ -329,6 +335,27 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
       await switchCamera(availableCameras[targetIdx]?.deviceId, targetIdx);
     }
   }, [availableCameras, switchCamera]);
+
+  // Keep ref in sync so auto-activation effects don't capture stale closure
+  useEffect(() => { toggleGlassesViewRef.current = toggleGlassesView; }, [toggleGlassesView]);
+
+  // Auto-activate glasses view when the Smart Glasses tab becomes active
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (activateGlasses && !glassesActiveRef.current && status === "ready") {
+      void toggleGlassesViewRef.current();
+    } else if (!activateGlasses && glassesActiveRef.current) {
+      void toggleGlassesViewRef.current();
+    }
+  }, [activateGlasses]); // intentionally omit status — handled by the effect below
+
+  // Also trigger when camera becomes ready while activateGlasses is already true
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (activateGlasses && status === "ready" && !glassesActiveRef.current) {
+      void toggleGlassesViewRef.current();
+    }
+  }, [status]); // intentionally omit activateGlasses — handled by effect above
 
   const cycleCamera = useCallback(async () => {
     if (availableCameras.length < 2) return;
