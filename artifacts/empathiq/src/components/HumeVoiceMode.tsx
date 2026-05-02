@@ -4,6 +4,7 @@ import { VoiceProvider, useVoice, VoiceReadyState, type JSONMessage } from "@hum
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Props {
   onVoiceEmotion: (emotion: string | null, scores: Record<string, number> | null) => void;
+  onExitVoice: () => void;
   sessionId: number | null;
   faceEmotionCounts: Record<string, number>;
 }
@@ -17,6 +18,7 @@ interface EviInnerProps {
   apiKey: string;
   configId: string | null;
   onVoiceEmotion: (emotion: string | null, scores: Record<string, number> | null) => void;
+  onExitVoice: () => void;
   faceEmotionCounts: Record<string, number>;
 }
 
@@ -86,7 +88,7 @@ function SoundWave({ color }: { color: string }) {
 interface TxMsg { id: string; role: "user" | "assistant"; text: string; emotion: string | null; }
 
 // ── Inner component (inside VoiceProvider context) ───────────────────────────
-function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviInnerProps) {
+function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts }: EviInnerProps) {
   const { connect, disconnect, readyState, messages, isMuted, mute, unmute } = useVoice();
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [transcript, setTranscript] = useState<TxMsg[]>([]);
@@ -95,7 +97,6 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
   const [connectError, setConnectError] = useState<string | null>(null);
   const processedCount = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
-  // Track current assistant turn so streaming fragments merge into one bubble
   const assistantTurnIdRef = useRef<string | null>(null);
 
   const isOpen = readyState === VoiceReadyState.OPEN;
@@ -114,7 +115,6 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const prosody: Record<string, number> = m.models?.prosody?.scores ?? {};
         const emotion = topEmotion(prosody);
-        // New user message starts a new assistant turn
         assistantTurnIdRef.current = null;
         if (text.trim()) {
           setTranscript((prev) => [...prev, { id: `u-${Date.now()}-${Math.random()}`, role: "user", text, emotion }]);
@@ -129,12 +129,10 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
         if (!text.trim()) continue;
 
         if (!assistantTurnIdRef.current) {
-          // Start new assistant bubble
           const id = `a-${Date.now()}-${Math.random()}`;
           assistantTurnIdRef.current = id;
           setTranscript((prev) => [...prev, { id, role: "assistant", text, emotion: null }]);
         } else {
-          // Append to the existing assistant bubble
           const turnId = assistantTurnIdRef.current;
           setTranscript((prev) =>
             prev.map((m) =>
@@ -143,7 +141,6 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
           );
         }
       } else if (msg.type === "assistant_end") {
-        // Turn finished — next assistant_message starts a new bubble
         assistantTurnIdRef.current = null;
       }
     }
@@ -153,9 +150,9 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [transcript]);
 
-  // Reset voice emotion when disconnected
+  // Reset voice emotion when session ends
   useEffect(() => {
-    if (readyState === VoiceReadyState.CLOSED || readyState === ("disconnected" as VoiceReadyState)) {
+    if (readyState === VoiceReadyState.CLOSED || readyState === VoiceReadyState.IDLE) {
       onVoiceEmotion(null, null);
       setTopVoiceEmotion(null);
       setTopVoiceScores({});
@@ -163,7 +160,6 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
     }
   }, [readyState, onVoiceEmotion]);
 
-  // ── Button handler: call connect() from a user gesture with explicit auth ──
   const handleStartSession = useCallback(() => {
     setConnectError(null);
     setTranscript([]);
@@ -183,33 +179,55 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
     assistantTurnIdRef.current = null;
   }, [disconnect, onVoiceEmotion]);
 
-  // Dominant face emotion for combined reading
+  // Exit voice — disconnect first if live, then navigate back
+  const handleExit = useCallback(() => {
+    if (isOpen || isConnecting) {
+      void disconnect();
+      onVoiceEmotion(null, null);
+    }
+    onExitVoice();
+  }, [isOpen, isConnecting, disconnect, onVoiceEmotion, onExitVoice]);
+
   const dominantFace = topEmotion(faceEmotionCounts);
   const voiceColor = emotionColor(topVoiceEmotion);
 
-  // Top 5 voice prosody scores for mini bar chart
   const top5Prosody = Object.entries(topVoiceScores)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
   return (
     <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
-      {/* Header */}
-      <div className="flex-none flex items-center justify-between px-5 py-3 border-b border-white/8 bg-black/20">
-        <div>
-          <p className="text-sm font-semibold text-foreground">EVI Voice Mode</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Hume EVI · Claude Haiku 4.5</p>
+      {/* ── Header ── */}
+      <div className="flex-none flex items-center justify-between px-4 py-2.5 border-b border-white/8 bg-black/20">
+        {/* Back button — always visible */}
+        <button
+          onClick={handleExit}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-white/6 transition-all"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7" />
+          </svg>
+          Chat
+        </button>
+
+        <div className="flex flex-col items-center">
+          <p className="text-xs font-semibold text-foreground">EVI Voice Mode</p>
+          <p className="text-[10px] text-muted-foreground">Hume EVI · Claude Haiku 4.5</p>
         </div>
-        {isOpen && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/12 text-red-300"
+
+        {/* Live indicator / placeholder */}
+        {isOpen ? (
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium bg-red-500/12 text-red-300"
             style={{ boxShadow: "0 0 0 1px rgba(248,113,113,0.35)" }}>
             <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
             Live
           </div>
+        ) : (
+          <div className="w-[58px]" />
         )}
       </div>
 
-      {/* Mode tabs — scrollable row */}
+      {/* ── Mode tabs — always interactive ── */}
       <div className="flex-none border-b border-white/6 bg-black/15">
         <div className="flex gap-1 px-3 py-2 overflow-x-auto no-scrollbar">
           {MODES.map((mode) => {
@@ -217,9 +235,14 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
             return (
               <button
                 key={mode.id}
-                onClick={() => setActiveMode(mode)}
-                disabled={isOpen}
-                className="flex-none flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium whitespace-nowrap transition-all disabled:opacity-50"
+                onClick={() => {
+                  setActiveMode(mode);
+                  // If a session is live, end it — mode change takes effect on next connect
+                  if (isOpen) {
+                    handleEndSession();
+                  }
+                }}
+                className="flex-none flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium whitespace-nowrap transition-all"
                 style={isActive
                   ? { backgroundColor: `${mode.color}20`, color: mode.color, boxShadow: `0 0 0 1px ${mode.color}45` }
                   : { color: "var(--muted-foreground)" }}
@@ -230,9 +253,14 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
             );
           })}
         </div>
+        {isOpen && (
+          <p className="text-center text-[9px] text-muted-foreground/50 pb-1.5">
+            Switching mode ends the current session
+          </p>
+        )}
       </div>
 
-      {/* Emotion reading row — only when connected */}
+      {/* ── Emotion reading row — only when connected ── */}
       {isOpen && (
         <div className="flex-none flex items-center gap-3 flex-wrap px-5 py-2 border-b border-white/5 bg-black/10">
           <div className="flex items-center gap-1.5 text-xs">
@@ -253,13 +281,12 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
               </span>
             )}
           </div>
-          {/* Mini prosody bars */}
           {top5Prosody.length > 0 && (
             <>
               <div className="w-px h-3 bg-white/10" />
               <div className="flex items-end gap-1 h-4">
                 {top5Prosody.map(([name, score]) => (
-                  <div key={name} className="flex flex-col items-center gap-0.5" title={`${name}: ${Math.round(score * 100)}%`}>
+                  <div key={name} title={`${name}: ${Math.round(score * 100)}%`}>
                     <div
                       className="w-2 rounded-sm transition-all duration-500"
                       style={{
@@ -276,7 +303,7 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
         </div>
       )}
 
-      {/* Transcript area */}
+      {/* ── Transcript ── */}
       <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2.5 min-h-0">
         {transcript.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-8 opacity-60">
@@ -314,26 +341,24 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
         <div ref={bottomRef} />
       </div>
 
-      {/* Error */}
+      {/* ── Error ── */}
       {connectError && (
         <div className="flex-none mx-4 mb-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
           {connectError}
         </div>
       )}
 
-      {/* Controls */}
+      {/* ── Controls ── */}
       <div className="flex-none px-6 pb-5 pt-3 flex flex-col items-center gap-2.5 border-t border-white/5">
         {isOpen && !isMuted && <SoundWave color="#f87171" />}
 
-        {/* Main mic button */}
         {isOpen ? (
           <button
             onClick={handleEndSession}
             className="relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 focus:outline-none"
             style={{
               backgroundColor: "rgba(248,113,113,0.18)",
-              boxShadow: "0 0 0 0 rgba(248,113,113,0.6), 0 0 28px rgba(248,113,113,0.4)",
-              animation: "modePulse 1.5s ease-in-out infinite",
+              boxShadow: "0 0 0 2px rgba(248,113,113,0.5), 0 0 28px rgba(248,113,113,0.3)",
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round">
@@ -364,7 +389,6 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
           </button>
         )}
 
-        {/* Mute toggle (only when open) */}
         {isOpen && (
           <button
             onClick={() => (isMuted ? unmute() : mute())}
@@ -385,8 +409,8 @@ function EviInner({ apiKey, configId, onVoiceEmotion, faceEmotionCounts }: EviIn
   );
 }
 
-// ── Outer wrapper: fetches credentials then mounts VoiceProvider + EviInner ──
-export default function HumeVoiceMode({ onVoiceEmotion, sessionId: _sessionId, faceEmotionCounts }: Props) {
+// ── Outer wrapper ─────────────────────────────────────────────────────────────
+export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: _sessionId, faceEmotionCounts }: Props) {
   const [config, setConfig] = useState<HumeConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -424,6 +448,12 @@ export default function HumeVoiceMode({ onVoiceEmotion, sessionId: _sessionId, f
         <div className="text-3xl">🎙️</div>
         <p className="text-sm font-medium text-foreground">EVI not configured</p>
         <p className="text-xs text-muted-foreground max-w-[260px]">{error ?? "Unknown error"}</p>
+        <button
+          onClick={onExitVoice}
+          className="mt-2 px-4 py-2 rounded-lg text-xs font-medium bg-white/6 text-muted-foreground hover:text-foreground hover:bg-white/10 transition-all"
+        >
+          ← Back to Chat
+        </button>
       </div>
     );
   }
@@ -434,6 +464,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, sessionId: _sessionId, f
         apiKey={config.apiKey}
         configId={config.configId}
         onVoiceEmotion={onVoiceEmotion}
+        onExitVoice={onExitVoice}
         faceEmotionCounts={faceEmotionCounts}
       />
     </VoiceProvider>

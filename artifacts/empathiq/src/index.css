@@ -111,6 +111,14 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+
+  /* alias used in HumeVoiceMode */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* ── Animated gradient background ── */

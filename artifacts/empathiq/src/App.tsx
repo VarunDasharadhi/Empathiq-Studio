@@ -133,7 +133,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <div className="flex flex-col h-full w-full overflow-hidden app-gradient-bg">
         {/* Header bar */}
-        <div className="flex-none flex items-center justify-between px-5 py-3 border-b border-white/8 bg-black/20 backdrop-blur-md z-10">
+        <div className="relative flex-none flex items-center justify-between px-5 py-3 border-b border-white/8 bg-black/20 backdrop-blur-md z-10">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
             <div className="logo-glow w-8 h-8 rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/20 border border-primary/30 flex items-center justify-center">
