@@ -60,6 +60,7 @@ interface Props {
   sessionId: number | null;
   voiceEmotion?: string | null;
   voiceEmotionScores?: Record<string, number> | null;
+  glassesMode?: boolean;
 }
 type Status = "loading-models" | "requesting-camera" | "ready" | "off" | "no-camera" | "error";
 
@@ -116,7 +117,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   );
 };
 
-export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null }: Props) {
+export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null, glassesMode = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>("loading-models");
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion>(null);
@@ -127,6 +128,12 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
   const [aiReading, setAiReading] = useState<string | null>(null);
   const [readingKey, setReadingKey] = useState(0);
   const [readingLoading, setReadingLoading] = useState(false);
+  const [glassesViewActive, setGlassesViewActive] = useState(false);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [activeCameraIdx, setActiveCameraIdx] = useState(0);
+  const [coachingText, setCoachingText] = useState<string | null>(null);
+  const [coachingKey, setCoachingKey] = useState(0);
+  const [coachingLoading, setCoachingLoading] = useState(false);
   const detectionRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const readingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionIdRef = useRef<number | null>(null);
@@ -139,6 +146,8 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
   const negativeStreakRef = useRef(0);
   const sustainedEmotionRef = useRef<string | null>(null);
   const onSustainedNegativeRef = useRef(onSustainedNegative);
+  const glassesActiveRef = useRef(false);
+  const coachingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => { onSustainedNegativeRef.current = onSustainedNegative; }, [onSustainedNegative]);
 
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
@@ -245,13 +254,17 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
     }, 2500);
   }, [onEmotionChange]);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (deviceId?: string) => {
     setStatus("requesting-camera");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
+      const videoConstraints: MediaTrackConstraints = deviceId
+        ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        : { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } };
+      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
+      // Enumerate cameras after permission granted (labels only available after getUserMedia)
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter((d) => d.kind === "videoinput");
+      setAvailableCameras(cams);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -261,6 +274,67 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
       }
     } catch { setStatus("no-camera"); }
   }, [startDetection]);
+
+  const switchCamera = useCallback(async (deviceId: string | undefined, newIdx: number) => {
+    if (detectionRef.current) { clearInterval(detectionRef.current); detectionRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    setActiveCameraIdx(newIdx);
+    await startCamera(deviceId);
+  }, [startCamera]);
+
+  const fetchCoaching = useCallback(async () => {
+    const emotion = emotionRef.current;
+    const conf = confidenceRef.current;
+    if (!emotion || !glassesActiveRef.current) return;
+    setCoachingLoading(true);
+    try {
+      const res = await fetch("/api/glasses-coaching", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emotion, confidence: conf }),
+      });
+      const data = await res.json() as { coaching: string | null };
+      if (data.coaching && glassesActiveRef.current) {
+        setCoachingText(data.coaching);
+        setCoachingKey((k) => k + 1);
+      }
+    } catch { /* non-critical */ } finally {
+      setCoachingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (glassesViewActive) {
+      fetchCoaching();
+      coachingIntervalRef.current = setInterval(fetchCoaching, 6000);
+    } else {
+      if (coachingIntervalRef.current) { clearInterval(coachingIntervalRef.current); coachingIntervalRef.current = null; }
+    }
+    return () => { if (coachingIntervalRef.current) { clearInterval(coachingIntervalRef.current); coachingIntervalRef.current = null; } };
+  }, [glassesViewActive, fetchCoaching]);
+
+  const toggleGlassesView = useCallback(async () => {
+    if (glassesActiveRef.current) {
+      glassesActiveRef.current = false;
+      setGlassesViewActive(false);
+      setCoachingText(null);
+      // Switch back to first camera (face-inward)
+      await switchCamera(availableCameras[0]?.deviceId, 0);
+    } else {
+      glassesActiveRef.current = true;
+      setGlassesViewActive(true);
+      setCoachingText(null);
+      // Switch to second camera if available, else stay on same (just flip/HUD changes)
+      const targetIdx = availableCameras.length > 1 ? 1 : 0;
+      await switchCamera(availableCameras[targetIdx]?.deviceId, targetIdx);
+    }
+  }, [availableCameras, switchCamera]);
+
+  const cycleCamera = useCallback(async () => {
+    if (availableCameras.length < 2) return;
+    const nextIdx = (activeCameraIdx + 1) % availableCameras.length;
+    await switchCamera(availableCameras[nextIdx]?.deviceId, nextIdx);
+  }, [availableCameras, activeCameraIdx, switchCamera]);
 
   const toggleCamera = useCallback(async () => {
     if (status === "ready") { stopCamera(); setStatus("off"); }
@@ -307,8 +381,42 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Glasses View toggle — only in Smart Glasses mode */}
+          {glassesMode && status === "ready" && (
+            <button
+              onClick={toggleGlassesView}
+              title={glassesViewActive ? "Back to face view" : "Switch to Glasses View — read their emotions"}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md backdrop-blur-sm text-[11px] font-medium transition-all ${
+                glassesViewActive
+                  ? "bg-emerald-500/30 text-emerald-300 ring-1 ring-emerald-400/50"
+                  : "bg-black/50 text-white/60 hover:bg-emerald-500/20 hover:text-emerald-300"
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="5" cy="12" r="3" /><circle cx="19" cy="12" r="3" />
+                <path d="M8 12h8M2 12h0M22 12h0" />
+              </svg>
+              {glassesViewActive ? "Face View" : "Glasses View"}
+            </button>
+          )}
+
+          {/* Camera cycle — only when glasses active and multiple cameras */}
+          {glassesViewActive && availableCameras.length > 1 && (
+            <button
+              onClick={cycleCamera}
+              title="Switch camera"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-black/50 backdrop-blur-sm text-[11px] font-medium text-white/60 hover:bg-white/10 hover:text-white transition-all"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 4v6h6" /><path d="M23 20v-6h-6" />
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 0 1 3.51 15" />
+              </svg>
+              Flip
+            </button>
+          )}
+
           {/* Privacy mode toggle — only when camera is running */}
-          {status === "ready" && (
+          {status === "ready" && !glassesViewActive && (
             <button
               onClick={() => setPrivacyMode((p) => !p)}
               title={privacyMode ? "Disable privacy mode" : "Enable privacy mode"}
@@ -355,7 +463,7 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
           muted
           className="absolute inset-0 w-full h-full object-cover transition-all duration-500"
           style={{
-            transform: "scaleX(-1)",
+            transform: glassesViewActive ? "none" : "scaleX(-1)",
             filter: privacyMode ? "blur(22px) brightness(0.6)" : "none",
           }}
         />
@@ -456,6 +564,46 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
             <div className="absolute bottom-4 right-8 w-8 h-8 border-r-2 border-b-2 border-primary/40 rounded-br" />
           </>
         )}
+
+        {/* Glasses View active badge */}
+        {glassesViewActive && status === "ready" && (
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+            <div className="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-400/30 backdrop-blur-sm rounded-full px-3 py-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] text-emerald-300 font-medium tracking-wide">Glasses View — Reading them</span>
+            </div>
+          </div>
+        )}
+
+        {/* HUD teleprompter overlay */}
+        {glassesViewActive && status === "ready" && (
+          <div
+            className="absolute inset-x-0 bottom-0 z-20 pointer-events-none"
+            style={{ background: "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.45) 55%, transparent 100%)", paddingBottom: 10, paddingTop: 28 }}
+          >
+            <div className="px-4 pb-1 min-h-[36px] flex items-end">
+              {coachingLoading && !coachingText && (
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[11px] text-emerald-400/60 font-mono italic">Reading…</span>
+                </div>
+              )}
+              {coachingText && (
+                <div
+                  key={coachingKey}
+                  className="flex items-start gap-2.5 w-full"
+                  style={{ animation: "eiFadeIn 0.5s ease-out forwards" }}
+                >
+                  <div className="flex-none w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1 animate-pulse" />
+                  <p className="text-[13px] leading-snug font-medium text-emerald-200 drop-shadow-lg flex-1">{coachingText}</p>
+                  {coachingLoading && (
+                    <div className="flex-none w-2.5 h-2.5 rounded-full border border-emerald-400/40 border-t-emerald-400 animate-spin mt-0.5" />
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Emotional Intelligence Panel ── */}
@@ -465,7 +613,7 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
         {/* Row 1 — Face */}
         <div className="flex items-center gap-2">
           <span className="text-sm leading-none w-5 text-center flex-none">👁️</span>
-          <span className="text-[10px] text-muted-foreground/50 w-10 flex-none">Face</span>
+          <span className="text-[10px] text-muted-foreground/50 w-10 flex-none">{glassesViewActive ? "Their" : "Face"}</span>
           {emotionCfg && detectedEmotion ? (
             <>
               <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 ${emotionCfg.bg} ${emotionCfg.text} ${emotionCfg.ring}`}>

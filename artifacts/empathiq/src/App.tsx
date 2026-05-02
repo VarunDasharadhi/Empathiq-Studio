@@ -43,6 +43,7 @@ function App() {
   const [rightPanel, setRightPanel] = useState<RightPanel>("chat");
   const [replaySession, setReplaySession] = useState<Session | null>(null);
   const [checkIn, setCheckIn] = useState<{ id: string; text: string } | null>(null);
+  const [isGlassesMode, setIsGlassesMode] = useState(false);
   const emotionCountRef = useRef<Record<string, number>>({});
 
   const createSession = useCallback(async () => {
@@ -79,6 +80,10 @@ function App() {
   const handleVoiceEmotion = useCallback((emotion: string | null, scores: Record<string, number> | null) => {
     setVoiceEmotion(emotion);
     setVoiceEmotionScores(scores);
+  }, []);
+
+  const handleModeChange = useCallback((modeId: string) => {
+    setIsGlassesMode(modeId === "smart-glasses");
   }, []);
 
   const handleSustainedNegative = useCallback(async (emotion: string, durationSeconds: number) => {
@@ -211,6 +216,7 @@ function App() {
               sessionId={sessionId}
               voiceEmotion={voiceEmotion}
               voiceEmotionScores={voiceEmotionScores}
+              glassesMode={isGlassesMode}
             />
           </div>
 
@@ -222,6 +228,7 @@ function App() {
                 sessionId={sessionId}
                 checkIn={checkIn}
                 onDismissCheckIn={() => setCheckIn(null)}
+                onModeChange={handleModeChange}
               />
             )}
             {rightPanel === "voice" && (

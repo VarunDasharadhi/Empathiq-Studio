@@ -251,9 +251,10 @@ interface Props {
   sessionId: number | null;
   checkIn?: { id: string; text: string } | null;
   onDismissCheckIn?: () => void;
+  onModeChange?: (modeId: string) => void;
 }
 
-export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDismissCheckIn }: Props) {
+export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDismissCheckIn, onModeChange }: Props) {
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -291,6 +292,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const handleModeChange = (mode: Mode) => {
     if (mode.id === activeMode.id) return;
     setActiveMode(mode);
+    onModeChange?.(mode.id);
     setMessages([]);
     setInput("");
     setCurrentCoherence(null);

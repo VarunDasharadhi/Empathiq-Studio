@@ -42,6 +42,36 @@ router.post("/proactive-checkin", async (req, res) => {
   }
 });
 
+router.post("/glasses-coaching", async (req, res) => {
+  try {
+    const { emotion, confidence } = req.body as { emotion: string; confidence: number };
+
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 50,
+      system:
+        "You are a real-time conversation coach whispering tips to the user via a HUD overlay. " +
+        "The user's camera is facing OUTWARD — you are reading the OTHER person's face. " +
+        "Give ONE ultra-short, actionable coaching tip based on that person's emotional state. " +
+        "Max 12 words. No emojis. No 'they' or pronouns — address the user directly with what to DO. " +
+        "Examples: 'Slow down — give them room to respond.' or 'They're open. Land your key point now.' or 'Ease the tension — try a light, warm remark.'",
+      messages: [
+        {
+          role: "user",
+          content: `The person I'm talking to appears ${emotion} (confidence ${Math.round(confidence * 100)}%). What should I do right now?`,
+        },
+      ],
+    });
+
+    const content = response.content[0];
+    if (content.type !== "text") { res.json({ coaching: null }); return; }
+    res.json({ coaching: content.text.trim() });
+  } catch (err) {
+    req.log.error({ err }, "Glasses coaching route error");
+    res.json({ coaching: null });
+  }
+});
+
 router.post("/emotion-reading", async (req, res) => {
   try {
     const { faceEmotion, faceConfidence, voiceEmotion, voiceEmotionScores } = req.body as {
