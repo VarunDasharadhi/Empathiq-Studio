@@ -433,6 +433,21 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
     return () => { cancelled = true; };
   }, []);
 
+  // Raw message handler — runs before the SDK builds its messages array,
+  // so models.prosody.scores is still intact here.
+  const handleRawMessage = useCallback((message: JSONMessage) => {
+    if (message.type === "user_message") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const m = message as any;
+      const scores: Record<string, number> = m.models?.prosody?.scores ?? {};
+      if (Object.keys(scores).length > 0) {
+        const entries = Object.entries(scores);
+        const top = entries.sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+        onVoiceEmotion(top, scores);
+      }
+    }
+  }, [onVoiceEmotion]);
+
   if (loading) {
     return (
       <div className="flex flex-col h-full items-center justify-center gap-3 text-muted-foreground">
@@ -459,7 +474,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
   }
 
   return (
-    <VoiceProvider clearMessagesOnDisconnect>
+    <VoiceProvider clearMessagesOnDisconnect onMessage={handleRawMessage}>
       <EviInner
         apiKey={config.apiKey}
         configId={config.configId}

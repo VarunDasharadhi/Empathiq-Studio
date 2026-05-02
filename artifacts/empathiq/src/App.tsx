@@ -234,6 +234,7 @@ function App() {
             {rightPanel === "voice" && (
               <HumeVoiceMode
                 onVoiceEmotion={handleVoiceEmotion}
+                onExitVoice={() => { setRightPanel("chat"); setVoiceEmotion(null); setVoiceEmotionScores(null); }}
                 sessionId={sessionId}
                 faceEmotionCounts={emotionCountRef.current}
               />
