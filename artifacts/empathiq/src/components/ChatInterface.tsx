@@ -10,34 +10,49 @@ interface Message {
 
 interface Props {
   currentEmotion: Emotion;
+  sessionId: number | null;
 }
 
 const EMOTION_LABELS: Record<string, string> = {
-  happy: "Happy",
-  sad: "Sad",
-  angry: "Angry",
-  fearful: "Fearful",
-  disgusted: "Disgusted",
-  surprised: "Surprised",
-  neutral: "Neutral",
+  happy: "Happy", sad: "Sad", angry: "Angry",
+  fearful: "Fearful", disgusted: "Disgusted",
+  surprised: "Surprised", neutral: "Neutral",
 };
 
 const EMOTION_COLORS: Record<string, string> = {
-  happy: "#facc15",
-  sad: "#60a5fa",
-  angry: "#f87171",
-  fearful: "#c084fc",
-  disgusted: "#4ade80",
-  surprised: "#fb923c",
-  neutral: "#9ca3af",
+  happy: "#facc15", sad: "#60a5fa", angry: "#f87171",
+  fearful: "#c084fc", disgusted: "#4ade80",
+  surprised: "#fb923c", neutral: "#9ca3af",
 };
 
-export default function ChatInterface({ currentEmotion }: Props) {
+async function saveMessage(
+  sessionId: number,
+  role: "user" | "assistant",
+  content: string,
+  emotion?: string | null,
+) {
+  try {
+    await fetch(`/api/sessions/${sessionId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role, content, emotion: emotion ?? null }),
+    });
+  } catch {
+    // non-critical
+  }
+}
+
+export default function ChatInterface({ currentEmotion, sessionId }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Reset messages when session changes
+  useEffect(() => {
+    setMessages([]);
+  }, [sessionId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -62,6 +77,10 @@ export default function ChatInterface({ currentEmotion }: Props) {
     setInput("");
     setIsTyping(true);
 
+    if (sessionId) {
+      saveMessage(sessionId, "user", text, currentEmotion);
+    }
+
     try {
       const apiMessages = newMessages.map((m, i) => ({
         role: m.role,
@@ -80,31 +99,31 @@ export default function ChatInterface({ currentEmotion }: Props) {
       });
 
       if (!res.ok) throw new Error("API error");
-
       const data = (await res.json()) as { content: string };
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: data.content,
-        },
-      ]);
+      const assistantMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: data.content,
+      };
+
+      setMessages((prev) => [...prev, assistantMsg]);
+
+      if (sessionId) {
+        saveMessage(sessionId, "assistant", data.content, null);
+      }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "I'm having trouble connecting right now. Please try again in a moment.",
-        },
-      ]);
+      const errMsg: Message = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "I'm having trouble connecting right now. Please try again in a moment.",
+      };
+      setMessages((prev) => [...prev, errMsg]);
     } finally {
       setIsTyping(false);
       inputRef.current?.focus();
     }
-  }, [input, isTyping, messages, currentEmotion]);
+  }, [input, isTyping, messages, currentEmotion, sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -124,22 +143,26 @@ export default function ChatInterface({ currentEmotion }: Props) {
           <p className="text-sm font-semibold text-foreground">EmpathIQ Chat</p>
           <p className="text-xs text-muted-foreground mt-0.5">AI calibrated to your emotional state</p>
         </div>
-        {emotionColor && emotionLabel && (
-          <div
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-500"
-            style={{
-              backgroundColor: `${emotionColor}20`,
-              color: emotionColor,
-              boxShadow: `0 0 0 1px ${emotionColor}40`,
-            }}
-          >
+        <div className="flex items-center gap-2">
+          {sessionId && (
+            <span className="text-[10px] text-muted-foreground px-2 py-1 rounded-md bg-muted font-mono">
+              #{sessionId}
+            </span>
+          )}
+          {emotionColor && emotionLabel && (
             <div
-              className="w-1.5 h-1.5 rounded-full"
-              style={{ backgroundColor: emotionColor }}
-            />
-            {emotionLabel}
-          </div>
-        )}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all duration-500"
+              style={{
+                backgroundColor: `${emotionColor}20`,
+                color: emotionColor,
+                boxShadow: `0 0 0 1px ${emotionColor}40`,
+              }}
+            >
+              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: emotionColor }} />
+              {emotionLabel}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
@@ -147,17 +170,7 @@ export default function ChatInterface({ currentEmotion }: Props) {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 pb-8">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-primary"
-              >
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             </div>
@@ -171,10 +184,7 @@ export default function ChatInterface({ currentEmotion }: Props) {
               {["How are you feeling today?", "I need someone to talk to.", "Tell me something uplifting."].map((s) => (
                 <button
                   key={s}
-                  onClick={() => {
-                    setInput(s);
-                    inputRef.current?.focus();
-                  }}
+                  onClick={() => { setInput(s); inputRef.current?.focus(); }}
                   className="text-left text-xs px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {s}
@@ -185,32 +195,22 @@ export default function ChatInterface({ currentEmotion }: Props) {
         )}
 
         {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`message-enter flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+          <div key={msg.id} className={`message-enter flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             {msg.role === "assistant" && (
               <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="text-primary">
-                  <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-13h2v6h-2V7zm0 8h2v2h-2v-2z" />
+                  <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z" />
                 </svg>
               </div>
             )}
-            <div
-              className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                msg.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-br-sm"
-                  : "bg-card text-foreground rounded-bl-sm border border-border"
-              }`}
-            >
+            <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+              msg.role === "user"
+                ? "bg-primary text-primary-foreground rounded-br-sm"
+                : "bg-card text-foreground rounded-bl-sm border border-border"
+            }`}>
               {msg.role === "user" && msg.emotion && (
-                <div
-                  className="flex items-center gap-1 mb-1.5 text-[10px] font-medium opacity-70"
-                >
-                  <div
-                    className="w-1 h-1 rounded-full"
-                    style={{ backgroundColor: EMOTION_COLORS[msg.emotion] }}
-                  />
+                <div className="flex items-center gap-1 mb-1.5 text-[10px] font-medium opacity-70">
+                  <div className="w-1 h-1 rounded-full" style={{ backgroundColor: EMOTION_COLORS[msg.emotion] }} />
                   {EMOTION_LABELS[msg.emotion]}
                 </div>
               )}
@@ -230,7 +230,7 @@ export default function ChatInterface({ currentEmotion }: Props) {
           <div className="message-enter flex justify-start">
             <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="text-primary">
-                <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-13h2v6h-2V7zm0 8h2v2h-2v-2z" />
+                <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z" />
               </svg>
             </div>
             <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
@@ -240,7 +240,6 @@ export default function ChatInterface({ currentEmotion }: Props) {
             </div>
           </div>
         )}
-
         <div ref={bottomRef} />
       </div>
 
@@ -272,16 +271,7 @@ export default function ChatInterface({ currentEmotion }: Props) {
             disabled={!input.trim() || isTyping}
             className="flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-primary hover:bg-primary/80 text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13" />
               <polygon points="22 2 15 22 11 13 2 9 22 2" />
             </svg>

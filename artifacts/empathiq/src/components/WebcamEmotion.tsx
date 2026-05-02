@@ -23,82 +23,54 @@ declare global {
 
 const MODELS_CDN = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
 
-const EMOTION_CONFIG: Record<
-  string,
-  { label: string; bg: string; text: string; ring: string; dot: string }
-> = {
-  happy: {
-    label: "Happy",
-    bg: "bg-yellow-400/20",
-    text: "text-yellow-300",
-    ring: "ring-yellow-400/40",
-    dot: "#facc15",
-  },
-  sad: {
-    label: "Sad",
-    bg: "bg-blue-500/20",
-    text: "text-blue-300",
-    ring: "ring-blue-400/40",
-    dot: "#60a5fa",
-  },
-  angry: {
-    label: "Angry",
-    bg: "bg-red-500/20",
-    text: "text-red-300",
-    ring: "ring-red-400/40",
-    dot: "#f87171",
-  },
-  fearful: {
-    label: "Fearful",
-    bg: "bg-purple-500/20",
-    text: "text-purple-300",
-    ring: "ring-purple-400/40",
-    dot: "#c084fc",
-  },
-  disgusted: {
-    label: "Disgusted",
-    bg: "bg-green-500/20",
-    text: "text-green-300",
-    ring: "ring-green-400/40",
-    dot: "#4ade80",
-  },
-  surprised: {
-    label: "Surprised",
-    bg: "bg-orange-500/20",
-    text: "text-orange-300",
-    ring: "ring-orange-400/40",
-    dot: "#fb923c",
-  },
-  neutral: {
-    label: "Neutral",
-    bg: "bg-gray-500/20",
-    text: "text-gray-300",
-    ring: "ring-gray-400/40",
-    dot: "#9ca3af",
-  },
+const EMOTION_CONFIG: Record<string, { label: string; bg: string; text: string; ring: string; dot: string }> = {
+  happy:    { label: "Happy",     bg: "bg-yellow-400/20", text: "text-yellow-300",  ring: "ring-yellow-400/40",  dot: "#facc15" },
+  sad:      { label: "Sad",       bg: "bg-blue-500/20",   text: "text-blue-300",    ring: "ring-blue-400/40",    dot: "#60a5fa" },
+  angry:    { label: "Angry",     bg: "bg-red-500/20",    text: "text-red-300",     ring: "ring-red-400/40",     dot: "#f87171" },
+  fearful:  { label: "Fearful",   bg: "bg-purple-500/20", text: "text-purple-300",  ring: "ring-purple-400/40",  dot: "#c084fc" },
+  disgusted:{ label: "Disgusted", bg: "bg-green-500/20",  text: "text-green-300",   ring: "ring-green-400/40",   dot: "#4ade80" },
+  surprised:{ label: "Surprised", bg: "bg-orange-500/20", text: "text-orange-300",  ring: "ring-orange-400/40",  dot: "#fb923c" },
+  neutral:  { label: "Neutral",   bg: "bg-gray-500/20",   text: "text-gray-300",    ring: "ring-gray-400/40",    dot: "#9ca3af" },
 };
 
 interface Props {
   onEmotionChange: (emotion: Emotion) => void;
+  sessionId: number | null;
 }
 
 type Status = "loading-models" | "requesting-camera" | "ready" | "no-camera" | "error";
 
-export default function WebcamEmotion({ onEmotionChange }: Props) {
+export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>("loading-models");
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion>(null);
   const [confidence, setConfidence] = useState(0);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const detectionRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
 
   const getDominantEmotion = (expressions: Record<string, number>): { emotion: Emotion; confidence: number } => {
     const entries = Object.entries(expressions) as Array<[string, number]>;
     const [emotion, conf] = entries.reduce((max, curr) => (curr[1] > max[1] ? curr : max), ["neutral", 0]);
-    return {
-      emotion: emotion as Emotion,
-      confidence: conf,
-    };
+    return { emotion: emotion as Emotion, confidence: conf };
+  };
+
+  const recordEmotionSnapshot = async (emotion: string, conf: number) => {
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    try {
+      await fetch(`/api/sessions/${sid}/emotions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emotion, confidence: conf }),
+      });
+    } catch {
+      // non-critical
+    }
   };
 
   const startDetection = useCallback(() => {
@@ -119,6 +91,7 @@ export default function WebcamEmotion({ onEmotionChange }: Props) {
           setDetectedEmotion(emotion);
           setConfidence(conf);
           onEmotionChange(emotion);
+          recordEmotionSnapshot(emotion as string, conf);
         }
       } catch {
         // silently continue
@@ -145,18 +118,11 @@ export default function WebcamEmotion({ onEmotionChange }: Props) {
   }, [startDetection]);
 
   useEffect(() => {
-    const waitForFaceApi = () => {
-      return new Promise<void>((resolve) => {
-        const check = () => {
-          if (window.faceapi) {
-            resolve();
-          } else {
-            setTimeout(check, 100);
-          }
-        };
+    const waitForFaceApi = () =>
+      new Promise<void>((resolve) => {
+        const check = () => (window.faceapi ? resolve() : setTimeout(check, 100));
         check();
       });
-    };
 
     const init = async () => {
       try {
@@ -207,7 +173,6 @@ export default function WebcamEmotion({ onEmotionChange }: Props) {
           style={{ transform: "scaleX(-1)" }}
         />
 
-        {/* Overlay states */}
         {status !== "ready" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0c10] gap-4">
             {status === "loading-models" && (
@@ -226,8 +191,7 @@ export default function WebcamEmotion({ onEmotionChange }: Props) {
               <>
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
                   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary">
-                    <path d="M23 7l-7 5 7 5V7z" />
-                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                    <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
                   </svg>
                 </div>
                 <div className="text-center">
@@ -259,12 +223,10 @@ export default function WebcamEmotion({ onEmotionChange }: Props) {
           </div>
         )}
 
-        {/* Scan line when ready + no face */}
         {status === "ready" && !detectedEmotion && (
           <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent opacity-60 scan-line" />
         )}
 
-        {/* Corner brackets overlay */}
         {status === "ready" && (
           <>
             <div className="absolute top-8 left-8 w-8 h-8 border-l-2 border-t-2 border-primary/40 rounded-tl" />
@@ -279,13 +241,8 @@ export default function WebcamEmotion({ onEmotionChange }: Props) {
       <div className="flex-none h-14 flex items-center justify-between px-4 border-t border-border bg-card">
         {emotionCfg && detectedEmotion ? (
           <>
-            <div
-              className={`emotion-badge flex items-center gap-2 px-3 py-1.5 rounded-full ring-1 ${emotionCfg.bg} ${emotionCfg.text} ${emotionCfg.ring}`}
-            >
-              <div
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: emotionCfg.dot, boxShadow: `0 0 6px ${emotionCfg.dot}` }}
-              />
+            <div className={`emotion-badge flex items-center gap-2 px-3 py-1.5 rounded-full ring-1 ${emotionCfg.bg} ${emotionCfg.text} ${emotionCfg.ring}`}>
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: emotionCfg.dot, boxShadow: `0 0 6px ${emotionCfg.dot}` }} />
               <span className="text-sm font-semibold">{emotionCfg.label}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -293,10 +250,7 @@ export default function WebcamEmotion({ onEmotionChange }: Props) {
               <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${Math.round(confidence * 100)}%`,
-                    backgroundColor: emotionCfg.dot,
-                  }}
+                  style={{ width: `${Math.round(confidence * 100)}%`, backgroundColor: emotionCfg.dot }}
                 />
               </div>
               <span className="text-xs font-medium tabular-nums" style={{ color: emotionCfg.dot }}>
@@ -307,15 +261,9 @@ export default function WebcamEmotion({ onEmotionChange }: Props) {
         ) : (
           <div className="flex items-center gap-2 text-muted-foreground">
             {status === "ready" ? (
-              <>
-                <div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" />
-                <span className="text-xs">Scanning for face…</span>
-              </>
+              <><div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" /><span className="text-xs">Scanning for face…</span></>
             ) : (
-              <>
-                <div className="w-2 h-2 rounded-full bg-muted-foreground" />
-                <span className="text-xs">{modelsLoaded ? "Camera starting…" : "Loading…"}</span>
-              </>
+              <><div className="w-2 h-2 rounded-full bg-muted-foreground" /><span className="text-xs">{modelsLoaded ? "Camera starting…" : "Loading…"}</span></>
             )}
           </div>
         )}
