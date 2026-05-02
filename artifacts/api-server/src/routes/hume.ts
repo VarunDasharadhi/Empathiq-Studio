@@ -14,9 +14,12 @@ type VoiceGender = keyof typeof VOICE_OPTIONS;
 // Cache one configId per voice so we don't recreate configs on every request
 const cachedConfigIds: Partial<Record<VoiceGender, string>> = {};
 
+const SYSTEM_PROMPT =
+  "You are EmpathIQ, an emotionally intelligent AI voice companion. " +
+  "Be warm, concise, and human. Keep responses to 1-3 sentences — this is a voice conversation.";
+
 async function getOrCreateEviConfig(
   apiKey: string,
-  externalUrl: string,
   gender: VoiceGender,
 ): Promise<string | null> {
   if (cachedConfigIds[gender]) return cachedConfigIds[gender]!;
@@ -37,27 +40,30 @@ async function getOrCreateEviConfig(
       }
     }
 
-    // Create new config with the chosen voice
+    // Create new config using Hume's native Anthropic integration (no custom proxy needed)
     const createRes = await fetch("https://api.hume.ai/v0/evi/configs", {
       method: "POST",
       headers: { "X-Hume-Api-Key": apiKey, "Content-Type": "application/json" },
       body: JSON.stringify({
         name: configKey,
-        language_model: { model_provider: "CUSTOM", model_resource: externalUrl },
+        language_model: { model_provider: "ANTHROPIC", model_resource: "claude-sonnet-4-20250514" },
         voice: { provider: "HUME_AI", name: voiceName },
-        system_prompt:
-          "You are EmpathIQ, an emotionally intelligent AI voice companion. " +
-          "Be warm, concise, and human. Keep responses to 1-3 sentences — this is a voice conversation.",
+        system_prompt: SYSTEM_PROMPT,
       }),
     });
-    if (!createRes.ok) return null;
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      throw new Error(`Hume config create failed (${createRes.status}): ${errText}`);
+    }
     const created = await createRes.json() as { id?: string };
     if (created.id) {
       cachedConfigIds[gender] = created.id;
       return created.id;
     }
     return null;
-  } catch {
+  } catch (err) {
+    // Log but don't crash — caller will return null configId
+    console.error("getOrCreateEviConfig error:", err);
     return null;
   }
 }
@@ -75,15 +81,14 @@ router.get("/hume/token", async (req, res) => {
   const rawVoice = (req.query.voice as string | undefined) ?? "feminine";
   const gender: VoiceGender = rawVoice === "masculine" ? "masculine" : "feminine";
 
-  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
-  const externalUrl = domain ? `https://${domain}/api/evi/chat` : null;
-  const configId = externalUrl ? await getOrCreateEviConfig(apiKey, externalUrl, gender) : null;
+  const configId = await getOrCreateEviConfig(apiKey, gender);
 
   res.json({ apiKey, configId, voice: gender });
 });
 
-// POST /api/evi/chat — External LLM endpoint for Hume EVI
-// Receives OpenAI-compatible chat completion request → proxies to Claude Haiku 4.5
+// POST /api/evi/chat — kept as a fallback External LLM endpoint
+// Not used by the default EVI configs (which use Hume's native Anthropic integration),
+// but available for custom prompt overrides in the future.
 router.post("/evi/chat", async (req, res) => {
   try {
     const body = req.body as {
@@ -96,10 +101,7 @@ router.post("/evi/chat", async (req, res) => {
       (m) => m.role === "user" || m.role === "assistant"
     ) as Array<{ role: "user" | "assistant"; content: string }>;
 
-    const systemPrompt =
-      body.system ??
-      "You are EmpathIQ, an emotionally intelligent AI voice companion. " +
-      "Be warm, concise, and human. Keep responses to 1-3 sentences — this is a voice conversation.";
+    const systemPrompt = body.system ?? SYSTEM_PROMPT;
 
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5",
