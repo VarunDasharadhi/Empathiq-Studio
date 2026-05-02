@@ -41,36 +41,17 @@ const EMOTION_CONFIG: Record<string, { label: string; bg: string; text: string; 
 };
 
 const EMOTION_VALUE: Record<string, number> = {
-  happy: 7,
-  surprised: 6,
-  neutral: 5,
-  fearful: 4,
-  sad: 3,
-  disgusted: 2,
-  angry: 1,
+  happy: 7, surprised: 6, neutral: 5,
+  fearful: 4, sad: 3, disgusted: 2, angry: 1,
 };
 
 const VALUE_LABEL: Record<number, string> = {
-  7: "Happy",
-  6: "Surp.",
-  5: "Neut.",
-  4: "Fear.",
-  3: "Sad",
-  2: "Disg.",
-  1: "Angry",
+  7: "Happy", 6: "Surp.", 5: "Neut.",
+  4: "Fear.", 3: "Sad", 2: "Disg.", 1: "Angry",
 };
 
-interface TimelinePoint {
-  t: number;
-  value: number;
-  emotion: string;
-}
-
-interface Props {
-  onEmotionChange: (emotion: Emotion) => void;
-  sessionId: number | null;
-}
-
+interface TimelinePoint { t: number; value: number; emotion: string; }
+interface Props { onEmotionChange: (emotion: Emotion) => void; sessionId: number | null; }
 type Status = "loading-models" | "requesting-camera" | "ready" | "off" | "no-camera" | "error";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,14 +85,13 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
   const [confidence, setConfidence] = useState(0);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [timeline, setTimeline] = useState<TimelinePoint[]>([]);
+  const [privacyMode, setPrivacyMode] = useState(false);
   const detectionRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionIdRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const tickRef = useRef(0);
 
-  useEffect(() => {
-    sessionIdRef.current = sessionId;
-  }, [sessionId]);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
 
   const getDominantEmotion = (expressions: Record<string, number>): { emotion: Emotion; confidence: number } => {
     const entries = Object.entries(expressions) as Array<[string, number]>;
@@ -128,23 +108,13 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ emotion, confidence: conf }),
       });
-    } catch {
-      // non-critical
-    }
+    } catch { /* non-critical */ }
   };
 
   const stopCamera = useCallback(() => {
-    if (detectionRef.current) {
-      clearInterval(detectionRef.current);
-      detectionRef.current = null;
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
+    if (detectionRef.current) { clearInterval(detectionRef.current); detectionRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    if (videoRef.current) videoRef.current.srcObject = null;
     setDetectedEmotion(null);
     setConfidence(0);
     onEmotionChange(null);
@@ -156,9 +126,8 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
       const video = videoRef.current;
       if (!video || !window.faceapi || video.readyState < 2) return;
       try {
-        const options = new window.faceapi.TinyFaceDetectorOptions();
         const result = await window.faceapi
-          .detectSingleFace(video, options)
+          .detectSingleFace(video, new window.faceapi.TinyFaceDetectorOptions())
           .withFaceExpressions();
         if (result?.expressions) {
           const { emotion, confidence: conf } = getDominantEmotion(result.expressions);
@@ -166,7 +135,6 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           setConfidence(conf);
           onEmotionChange(emotion);
           recordEmotionSnapshot(emotion as string, conf);
-
           const value = EMOTION_VALUE[emotion as string] ?? 5;
           const t = tickRef.current++;
           setTimeline((prev) => {
@@ -174,9 +142,7 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
             return next.length > 20 ? next.slice(next.length - 20) : next;
           });
         }
-      } catch {
-        // silently continue
-      }
+      } catch { /* silently continue */ }
     }, 2500);
   }, [onEmotionChange]);
 
@@ -194,27 +160,19 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
         setStatus("ready");
         startDetection();
       }
-    } catch {
-      setStatus("no-camera");
-    }
+    } catch { setStatus("no-camera"); }
   }, [startDetection]);
 
   const toggleCamera = useCallback(async () => {
-    if (status === "ready") {
-      stopCamera();
-      setStatus("off");
-    } else if (status === "off" || status === "no-camera") {
-      await startCamera();
-    }
+    if (status === "ready") { stopCamera(); setStatus("off"); }
+    else if (status === "off" || status === "no-camera") { await startCamera(); }
   }, [status, stopCamera, startCamera]);
 
   useEffect(() => {
-    const waitForFaceApi = () =>
-      new Promise<void>((resolve) => {
-        const check = () => (window.faceapi ? resolve() : setTimeout(check, 100));
-        check();
-      });
-
+    const waitForFaceApi = () => new Promise<void>((resolve) => {
+      const check = () => (window.faceapi ? resolve() : setTimeout(check, 100));
+      check();
+    });
     const init = async () => {
       try {
         await waitForFaceApi();
@@ -224,18 +182,12 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
         ]);
         setModelsLoaded(true);
         await startCamera();
-      } catch {
-        setStatus("error");
-      }
+      } catch { setStatus("error"); }
     };
-
     init();
-
     return () => {
       if (detectionRef.current) clearInterval(detectionRef.current);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, [startCamera]);
 
@@ -255,23 +207,44 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           <span className="text-[11px] font-medium text-white/70">Emotion Sensor</span>
         </div>
 
-        {canToggle && (
-          <button
-            onClick={toggleCamera}
-            title={status === "ready" ? "Turn camera off" : "Turn camera on"}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md backdrop-blur-sm text-[11px] font-medium transition-all ${
-              status === "ready"
-                ? "bg-black/50 text-white/70 hover:bg-red-500/30 hover:text-red-300"
-                : "bg-black/50 text-white/50 hover:bg-primary/20 hover:text-primary"
-            }`}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M23 7l-7 5 7 5V7z" />
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-            </svg>
-            {status === "ready" ? "Off" : "On"}
-          </button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {/* Privacy mode toggle — only when camera is running */}
+          {status === "ready" && (
+            <button
+              onClick={() => setPrivacyMode((p) => !p)}
+              title={privacyMode ? "Disable privacy mode" : "Enable privacy mode"}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md backdrop-blur-sm text-[11px] font-medium transition-all ${
+                privacyMode
+                  ? "bg-violet-500/30 text-violet-300 ring-1 ring-violet-400/50"
+                  : "bg-black/50 text-white/60 hover:bg-violet-500/20 hover:text-violet-300"
+              }`}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              Privacy
+            </button>
+          )}
+
+          {/* Camera on/off */}
+          {canToggle && (
+            <button
+              onClick={toggleCamera}
+              title={status === "ready" ? "Turn camera off" : "Turn camera on"}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md backdrop-blur-sm text-[11px] font-medium transition-all ${
+                status === "ready"
+                  ? "bg-black/50 text-white/70 hover:bg-red-500/30 hover:text-red-300"
+                  : "bg-black/50 text-white/50 hover:bg-primary/20 hover:text-primary"
+              }`}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M23 7l-7 5 7 5V7z" />
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+              </svg>
+              {status === "ready" ? "Off" : "On"}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Video */}
@@ -281,9 +254,25 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           autoPlay
           playsInline
           muted
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ transform: "scaleX(-1)" }}
+          className="absolute inset-0 w-full h-full object-cover transition-all duration-500"
+          style={{
+            transform: "scaleX(-1)",
+            filter: privacyMode ? "blur(22px) brightness(0.6)" : "none",
+          }}
         />
+
+        {/* Privacy mode overlay badge */}
+        {privacyMode && status === "ready" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center gap-2 bg-black/40 backdrop-blur-sm rounded-2xl px-5 py-4">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-violet-300">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              <p className="text-xs font-medium text-violet-200">Privacy mode on</p>
+              <p className="text-[10px] text-white/40">Emotion detection still active</p>
+            </div>
+          </div>
+        )}
 
         {status !== "ready" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0c10] gap-4">
@@ -356,11 +345,11 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           </div>
         )}
 
-        {status === "ready" && !detectedEmotion && (
+        {status === "ready" && !detectedEmotion && !privacyMode && (
           <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent opacity-60 scan-line" />
         )}
 
-        {status === "ready" && (
+        {status === "ready" && !privacyMode && (
           <>
             <div className="absolute top-10 left-8 w-8 h-8 border-l-2 border-t-2 border-primary/40 rounded-tl" />
             <div className="absolute top-10 right-8 w-8 h-8 border-r-2 border-t-2 border-primary/40 rounded-tr" />

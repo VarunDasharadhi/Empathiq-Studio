@@ -90,22 +90,63 @@ async function saveMessage(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role, content, emotion: emotion ?? null }),
     });
-  } catch {
-    // non-critical
+  } catch { /* non-critical */ }
+}
+
+// Web Speech API types
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+interface SpeechRecognitionInstance extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  onresult: ((e: SpeechRecognitionEvent) => void) | null;
+  onerror: ((e: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+}
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognitionInstance;
+    webkitSpeechRecognition: new () => SpeechRecognitionInstance;
   }
 }
+
+const SoundWave = ({ color }: { color: string }) => (
+  <div className="flex items-center gap-[3px] h-5">
+    {[0, 1, 2, 3, 4].map((i) => (
+      <div
+        key={i}
+        className="w-[3px] rounded-full sound-bar"
+        style={{
+          backgroundColor: color,
+          animationDelay: `${i * 0.1}s`,
+        }}
+      />
+    ))}
+  </div>
+);
 
 export default function ChatInterface({ currentEmotion, sessionId }: Props) {
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechSupported] = useState(
+    () => typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const interimRef = useRef("");
 
-  useEffect(() => {
-    setMessages([]);
-  }, [sessionId]);
+  useEffect(() => { setMessages([]); }, [sessionId]);
 
   const handleModeChange = (mode: Mode) => {
     if (mode.id === activeMode.id) return;
@@ -119,8 +160,8 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim();
+  const sendMessage = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? input).trim();
     if (!text || isTyping) return;
 
     const emotionTag = currentEmotion ? `[EMOTION: ${currentEmotion}] ` : "";
@@ -138,9 +179,7 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
     setInput("");
     setIsTyping(true);
 
-    if (sessionId) {
-      saveMessage(sessionId, "user", text, currentEmotion);
-    }
+    if (sessionId) saveMessage(sessionId, "user", text, currentEmotion);
 
     try {
       const apiMessages = newMessages.map((m, i) => ({
@@ -156,33 +195,20 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: apiMessages,
-          systemPrompt: activeMode.systemPrompt,
-        }),
+        body: JSON.stringify({ messages: apiMessages, systemPrompt: activeMode.systemPrompt }),
       });
 
       if (!res.ok) throw new Error("API error");
       const data = (await res.json()) as { content: string };
 
-      const assistantMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: data.content,
-      };
-
+      const assistantMsg: Message = { id: crypto.randomUUID(), role: "assistant", content: data.content };
       setMessages((prev) => [...prev, assistantMsg]);
-
-      if (sessionId) {
-        saveMessage(sessionId, "assistant", data.content, null);
-      }
+      if (sessionId) saveMessage(sessionId, "assistant", data.content, null);
     } catch {
-      const errMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "I'm having trouble connecting right now. Please try again in a moment.",
-      };
-      setMessages((prev) => [...prev, errMsg]);
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: "assistant", content: "I'm having trouble connecting right now. Please try again in a moment." },
+      ]);
     } finally {
       setIsTyping(false);
       inputRef.current?.focus();
@@ -190,11 +216,66 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
   }, [input, isTyping, messages, currentEmotion, sessionId, activeMode]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
+
+  // Voice input — hold to record
+  const startRecording = useCallback(() => {
+    if (!speechSupported || isRecording) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    interimRef.current = "";
+
+    rec.onresult = (e: SpeechRecognitionEvent) => {
+      let transcript = "";
+      for (let i = 0; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
+      }
+      interimRef.current = transcript;
+      setInput(transcript);
+    };
+
+    rec.onerror = () => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    rec.onend = () => {
+      setIsRecording(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = rec;
+    setIsRecording(true);
+    rec.start();
+  }, [speechSupported, isRecording]);
+
+  const stopRecording = useCallback(() => {
+    if (!recognitionRef.current) return;
+    recognitionRef.current.stop();
+    recognitionRef.current = null;
+    setIsRecording(false);
+
+    const text = interimRef.current.trim();
+    if (text) {
+      // Small delay to let state flush before sending
+      setTimeout(() => sendMessage(text), 80);
+    }
+  }, [sendMessage]);
+
+  // Touch / mouse events for hold-to-speak
+  const handleMicPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    startRecording();
+  }, [startRecording]);
+
+  const handleMicPointerUp = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    stopRecording();
+  }, [stopRecording]);
 
   const emotionColor = currentEmotion ? EMOTION_COLORS[currentEmotion] : null;
   const emotionLabel = currentEmotion ? EMOTION_LABELS[currentEmotion] : null;
@@ -352,6 +433,16 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
             Responding to your {EMOTION_LABELS[currentEmotion]?.toLowerCase()} state
           </div>
         )}
+
+        {/* Recording indicator */}
+        {isRecording && (
+          <div className="flex items-center gap-2 mb-2 px-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            <span className="text-[11px] text-red-300">Recording… release to send</span>
+            <SoundWave color={activeMode.color} />
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
@@ -362,11 +453,40 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
             rows={1}
             className="flex-1 resize-none rounded-xl bg-muted border border-border text-foreground placeholder:text-muted-foreground text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all min-h-[46px] max-h-[120px] scrollbar-thin"
             style={{ fieldSizing: "content" } as React.CSSProperties}
-            disabled={isTyping}
+            disabled={isTyping || isRecording}
           />
+
+          {/* Mic button — hold to speak */}
+          {speechSupported && (
+            <button
+              onPointerDown={handleMicPointerDown}
+              onPointerUp={handleMicPointerUp}
+              onPointerLeave={handleMicPointerUp}
+              disabled={isTyping}
+              title="Hold to speak"
+              className={`flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all select-none touch-none ${
+                isRecording
+                  ? "bg-red-500 text-white scale-105 shadow-lg"
+                  : "bg-muted border border-border text-muted-foreground hover:text-foreground hover:bg-muted/80 disabled:opacity-30"
+              }`}
+              style={isRecording ? { boxShadow: `0 0 16px rgba(239,68,68,0.5)` } : {}}
+            >
+              {isRecording ? (
+                <SoundWave color="white" />
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              )}
+            </button>
+          )}
+
           <button
-            onClick={sendMessage}
-            disabled={!input.trim() || isTyping}
+            onClick={() => sendMessage()}
+            disabled={!input.trim() || isTyping || isRecording}
             className="flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-primary hover:bg-primary/80 text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

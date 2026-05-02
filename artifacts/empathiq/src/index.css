@@ -160,3 +160,18 @@
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+@keyframes soundBar {
+  0%, 100% { height: 4px; }
+  50%       { height: 18px; }
+}
+
+.sound-bar {
+  height: 4px;
+  animation: soundBar 0.6s ease-in-out infinite;
+}
+.sound-bar:nth-child(1) { animation-delay: 0s; }
+.sound-bar:nth-child(2) { animation-delay: 0.1s; }
+.sound-bar:nth-child(3) { animation-delay: 0.2s; }
+.sound-bar:nth-child(4) { animation-delay: 0.1s; }
+.sound-bar:nth-child(5) { animation-delay: 0s; }
