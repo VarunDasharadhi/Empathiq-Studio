@@ -1,54 +1,104 @@
 import { Router, type IRouter } from "express";
+import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// Hardcoded EmpathIQ EVI config (claude-sonnet-4-20250514 + Kora voice + base system prompt)
-const EMPATHIQ_CONFIG_ID = "7fb3266e-a204-4f52-bd62-7c5f2da3bd92";
+// Cache EVI config ID across requests (reset on server restart)
+let cachedConfigId: string | null = null;
 
-async function humeGet(path: string, apiKey: string) {
-  const res = await fetch(`https://api.hume.ai/v0/evi${path}`, {
-    headers: { "X-Hume-Api-Key": apiKey },
-  });
-  if (!res.ok) return null;
-  return res.json() as Promise<unknown>;
+async function getOrCreateEviConfig(apiKey: string, externalUrl: string): Promise<string | null> {
+  if (cachedConfigId) return cachedConfigId;
+  try {
+    // Reuse any existing EmpathIQ config first
+    const listRes = await fetch("https://api.hume.ai/v0/evi/configs?page_size=20", {
+      headers: { "X-Hume-Api-Key": apiKey },
+    });
+    if (listRes.ok) {
+      const listData = await listRes.json() as { configs_page?: Array<{ id: string; name: string }> };
+      const existing = listData.configs_page?.find((c) => c.name.startsWith("EmpathIQ"));
+      if (existing) { cachedConfigId = existing.id; return existing.id; }
+    }
+
+    // Create new config with Claude Haiku 4.5 as external LLM
+    const createRes = await fetch("https://api.hume.ai/v0/evi/configs", {
+      method: "POST",
+      headers: { "X-Hume-Api-Key": apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "EmpathIQ",
+        language_model: { model_provider: "CUSTOM", model_resource: externalUrl },
+        system_prompt:
+          "You are EmpathIQ, an emotionally intelligent AI voice companion. " +
+          "Be warm, concise, and human. Keep responses to 1-3 sentences — this is a voice conversation.",
+      }),
+    });
+    if (!createRes.ok) return null;
+    const created = await createRes.json() as { id?: string };
+    if (created.id) { cachedConfigId = created.id; return created.id; }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
-router.get("/hume/config", async (req, res) => {
+// GET /api/hume/token — return API key + EVI config ID for the frontend
+router.get("/hume/token", async (req, res) => {
   const apiKey = process.env.HUME_API_KEY;
   if (!apiKey) {
     req.log.warn("HUME_API_KEY is not configured");
-    res.status(503).json({ error: "Hume API key not configured" });
+    res.status(500).json({ error: "HUME_API_KEY not configured" });
     return;
   }
 
+  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+  const externalUrl = domain ? `https://${domain}/api/evi/chat` : null;
+  const configId = externalUrl ? await getOrCreateEviConfig(apiKey, externalUrl) : null;
+
+  res.json({ apiKey, configId });
+});
+
+// POST /api/evi/chat — External LLM endpoint for Hume EVI
+// Receives OpenAI-compatible chat completion request → proxies to Claude Haiku 4.5
+router.post("/evi/chat", async (req, res) => {
   try {
-    const [configsData, voicesData] = await Promise.all([
-      humeGet("/configs?page_size=20", apiKey),
-      humeGet("/custom-voices?page_size=50", apiKey),
-    ]);
+    const body = req.body as {
+      messages?: Array<{ role: string; content: string }>;
+      system?: string;
+      max_tokens?: number;
+    };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const configs = ((configsData as any)?.configs_page ?? []).map((c: any) => ({
-      id: c.id as string,
-      version: c.version as number,
-      name: (c.name as string) ?? "Unnamed config",
-    }));
+    const messages = (body.messages ?? []).filter(
+      (m) => m.role === "user" || m.role === "assistant"
+    ) as Array<{ role: "user" | "assistant"; content: string }>;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const voices = ((voicesData as any)?.custom_voices_page ?? []).map((v: any) => ({
-      id: v.id as string,
-      name: (v.name as string) ?? "Unnamed voice",
-    }));
+    const systemPrompt =
+      body.system ??
+      "You are EmpathIQ, an emotionally intelligent AI voice companion. " +
+      "Be warm, concise, and human. Keep responses to 1-3 sentences — this is a voice conversation.";
+
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: body.max_tokens ?? 200,
+      system: systemPrompt,
+      messages,
+    });
+
+    const text = response.content[0]?.type === "text" ? response.content[0].text : "";
 
     res.json({
-      apiKey,
-      configs,
-      voices,
-      defaultConfigId: EMPATHIQ_CONFIG_ID,
+      id: `chatcmpl-${Date.now()}`,
+      object: "chat.completion",
+      model: "claude-haiku-4-5",
+      choices: [{ index: 0, message: { role: "assistant", content: text }, finish_reason: "stop" }],
+      usage: {
+        prompt_tokens: response.usage.input_tokens,
+        completion_tokens: response.usage.output_tokens,
+        total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+      },
     });
   } catch (err) {
-    req.log.error({ err }, "Hume config fetch error");
-    res.json({ apiKey, configs: [], voices: [], defaultConfigId: EMPATHIQ_CONFIG_ID });
+    req.log.error({ err }, "EVI external LLM error");
+    res.status(500).json({ error: { message: "Internal server error", type: "server_error" } });
   }
 });
 
