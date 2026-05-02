@@ -9,6 +9,39 @@ const BASE_SUFFIX = `\n\nYou will always receive the user's current facial emoti
 
 const DEFAULT_SYSTEM_PROMPT = `You are EmpathIQ, an emotionally intelligent AI companion. Be warm, wise, and human.${BASE_SUFFIX}`;
 
+router.post("/proactive-checkin", async (req, res) => {
+  try {
+    const { emotion, durationSeconds } = req.body as {
+      emotion: string;
+      durationSeconds: number;
+    };
+
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-5",
+      max_tokens: 60,
+      system:
+        "You are a warm, gentle AI companion. " +
+        "The user has been showing signs of distress for a while. " +
+        "Write ONE very short, soft check-in message (max 15 words). " +
+        "Do not start with 'I'. Be gentle, not alarming. No emojis. " +
+        "Examples: 'Something feels heavy right now. Want to talk about it?' or 'Looks like things might be weighing on you. I'm here.'",
+      messages: [
+        {
+          role: "user",
+          content: `The user has shown ${emotion} emotion for about ${durationSeconds} seconds. Write a gentle check-in.`,
+        },
+      ],
+    });
+
+    const content = response.content[0];
+    if (content.type !== "text") { res.json({ message: null }); return; }
+    res.json({ message: content.text.trim() });
+  } catch (err) {
+    req.log.error({ err }, "Proactive checkin route error");
+    res.json({ message: null });
+  }
+});
+
 router.post("/emotion-reading", async (req, res) => {
   try {
     const { faceEmotion, faceConfidence, voiceEmotion, voiceEmotionScores } = req.body as {

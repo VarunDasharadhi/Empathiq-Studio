@@ -246,9 +246,14 @@ function CoherenceRing({ score, mismatch, label }: { score: number; mismatch: bo
   );
 }
 
-interface Props { currentEmotion: Emotion; sessionId: number | null; }
+interface Props {
+  currentEmotion: Emotion;
+  sessionId: number | null;
+  checkIn?: { id: string; text: string } | null;
+  onDismissCheckIn?: () => void;
+}
 
-export default function ChatInterface({ currentEmotion, sessionId }: Props) {
+export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDismissCheckIn }: Props) {
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -429,6 +434,31 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
           )}
         </div>
       </div>
+
+      {/* Proactive check-in banner */}
+      {checkIn && (
+        <div
+          key={checkIn.id}
+          className="flex-none mx-4 mt-3 px-4 py-3 rounded-xl border border-violet-400/20 bg-violet-500/8 backdrop-blur-sm flex items-start gap-3"
+          style={{ animation: "checkInSlide 0.4s cubic-bezier(0.16,1,0.3,1) both" }}
+        >
+          <div className="flex-none mt-0.5 w-6 h-6 rounded-full bg-violet-500/20 border border-violet-400/30 flex items-center justify-center">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-violet-300">
+              <path d="M12 20.5c-5.25-4.8-10-9-10-13A5 5 0 0 1 12 4.93 5 5 0 0 1 22 7.5c0 4-4.75 8.2-10 13z" fill="currentColor" opacity="0.5" />
+            </svg>
+          </div>
+          <p className="flex-1 text-xs leading-relaxed text-violet-200/90">{checkIn.text}</p>
+          <button
+            onClick={onDismissCheckIn}
+            className="flex-none text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Dismiss"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Mode selector */}
       <div className="flex-none px-4 pt-3 pb-2 flex gap-2 overflow-x-auto scrollbar-none">

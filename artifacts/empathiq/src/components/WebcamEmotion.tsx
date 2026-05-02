@@ -51,8 +51,12 @@ const VALUE_LABEL: Record<number, string> = {
 };
 
 interface TimelinePoint { t: number; value: number; emotion: string; }
+const NEGATIVE_EMOTIONS = new Set(["sad", "angry", "fearful", "disgusted"]);
+const SUSTAINED_THRESHOLD = 24; // ~60s at 2500ms interval
+
 interface Props {
   onEmotionChange: (emotion: Emotion) => void;
+  onSustainedNegative?: (emotion: string, durationSeconds: number) => void;
   sessionId: number | null;
   voiceEmotion?: string | null;
   voiceEmotionScores?: Record<string, number> | null;
@@ -112,7 +116,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   );
 };
 
-export default function WebcamEmotion({ onEmotionChange, sessionId, voiceEmotion = null, voiceEmotionScores = null }: Props) {
+export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>("loading-models");
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion>(null);
@@ -132,6 +136,10 @@ export default function WebcamEmotion({ onEmotionChange, sessionId, voiceEmotion
   const confidenceRef = useRef(0);
   const voiceEmotionRef = useRef<string | null>(null);
   const voiceScoresRef = useRef<Record<string, number> | null>(null);
+  const negativeStreakRef = useRef(0);
+  const sustainedEmotionRef = useRef<string | null>(null);
+  const onSustainedNegativeRef = useRef(onSustainedNegative);
+  useEffect(() => { onSustainedNegativeRef.current = onSustainedNegative; }, [onSustainedNegative]);
 
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   useEffect(() => { voiceEmotionRef.current = voiceEmotion; }, [voiceEmotion]);
@@ -213,6 +221,19 @@ export default function WebcamEmotion({ onEmotionChange, sessionId, voiceEmotion
           confidenceRef.current = conf;
           onEmotionChange(emotion);
           recordEmotionSnapshot(emotion as string, conf);
+          // Sustained negative emotion tracking
+          if (emotion && NEGATIVE_EMOTIONS.has(emotion as string)) {
+            negativeStreakRef.current += 1;
+            sustainedEmotionRef.current = emotion as string;
+            if (negativeStreakRef.current === SUSTAINED_THRESHOLD) {
+              const seconds = Math.round(SUSTAINED_THRESHOLD * 2.5);
+              onSustainedNegativeRef.current?.(emotion as string, seconds);
+              negativeStreakRef.current = 0; // reset so it won't fire again immediately
+            }
+          } else {
+            negativeStreakRef.current = 0;
+            sustainedEmotionRef.current = null;
+          }
           const value = EMOTION_VALUE[emotion as string] ?? 5;
           const t = tickRef.current++;
           setTimeline((prev) => {

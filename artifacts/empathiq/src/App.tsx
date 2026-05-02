@@ -42,6 +42,7 @@ function App() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanel>("chat");
   const [replaySession, setReplaySession] = useState<Session | null>(null);
+  const [checkIn, setCheckIn] = useState<{ id: string; text: string } | null>(null);
   const emotionCountRef = useRef<Record<string, number>>({});
 
   const createSession = useCallback(async () => {
@@ -79,6 +80,21 @@ function App() {
     setVoiceEmotion(emotion);
     setVoiceEmotionScores(scores);
   }, []);
+
+  const handleSustainedNegative = useCallback(async (emotion: string, durationSeconds: number) => {
+    if (rightPanel !== "chat") return;
+    try {
+      const res = await fetch("/api/proactive-checkin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emotion, durationSeconds }),
+      });
+      const data = await res.json() as { message: string | null };
+      if (data.message) {
+        setCheckIn({ id: `checkin-${Date.now()}`, text: data.message });
+      }
+    } catch { /* non-critical */ }
+  }, [rightPanel]);
 
   useEffect(() => { createSession(); }, [createSession]);
 
@@ -191,6 +207,7 @@ function App() {
           <div className="w-1/2 h-full border-r border-white/8 flex flex-col">
             <WebcamEmotion
               onEmotionChange={handleFaceEmotionChange}
+              onSustainedNegative={handleSustainedNegative}
               sessionId={sessionId}
               voiceEmotion={voiceEmotion}
               voiceEmotionScores={voiceEmotionScores}
@@ -200,7 +217,12 @@ function App() {
           {/* Right — chat / voice / history */}
           <div className="w-1/2 h-full flex flex-col">
             {rightPanel === "chat" && (
-              <ChatInterface currentEmotion={faceEmotion} sessionId={sessionId} />
+              <ChatInterface
+                currentEmotion={faceEmotion}
+                sessionId={sessionId}
+                checkIn={checkIn}
+                onDismissCheckIn={() => setCheckIn(null)}
+              />
             )}
             {rightPanel === "voice" && (
               <HumeVoiceMode
