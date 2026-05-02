@@ -120,12 +120,54 @@ export default function WebcamEmotion({ onEmotionChange, sessionId, voiceEmotion
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [timeline, setTimeline] = useState<TimelinePoint[]>([]);
   const [privacyMode, setPrivacyMode] = useState(false);
+  const [aiReading, setAiReading] = useState<string | null>(null);
+  const [readingKey, setReadingKey] = useState(0);
+  const [readingLoading, setReadingLoading] = useState(false);
   const detectionRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const readingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionIdRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const tickRef = useRef(0);
+  const emotionRef = useRef<Emotion>(null);
+  const confidenceRef = useRef(0);
+  const voiceEmotionRef = useRef<string | null>(null);
+  const voiceScoresRef = useRef<Record<string, number> | null>(null);
 
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+  useEffect(() => { voiceEmotionRef.current = voiceEmotion; }, [voiceEmotion]);
+  useEffect(() => { voiceScoresRef.current = voiceEmotionScores; }, [voiceEmotionScores]);
+
+  const fetchAiReading = useCallback(async () => {
+    const face = emotionRef.current;
+    const voice = voiceEmotionRef.current;
+    if (!face && !voice) return;
+    setReadingLoading(true);
+    try {
+      const res = await fetch("/api/emotion-reading", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          faceEmotion: face,
+          faceConfidence: confidenceRef.current,
+          voiceEmotion: voice,
+          voiceEmotionScores: voiceScoresRef.current,
+        }),
+      });
+      const data = await res.json() as { reading: string | null };
+      if (data.reading) {
+        setAiReading(data.reading);
+        setReadingKey((k) => k + 1);
+      }
+    } catch { /* non-critical */ } finally {
+      setReadingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (readingRef.current) clearInterval(readingRef.current);
+    readingRef.current = setInterval(fetchAiReading, 10000);
+    return () => { if (readingRef.current) clearInterval(readingRef.current); };
+  }, [fetchAiReading]);
 
   const getDominantEmotion = (expressions: Record<string, number>): { emotion: Emotion; confidence: number } => {
     const entries = Object.entries(expressions) as Array<[string, number]>;
@@ -167,6 +209,8 @@ export default function WebcamEmotion({ onEmotionChange, sessionId, voiceEmotion
           const { emotion, confidence: conf } = getDominantEmotion(result.expressions);
           setDetectedEmotion(emotion);
           setConfidence(conf);
+          emotionRef.current = emotion;
+          confidenceRef.current = conf;
           onEmotionChange(emotion);
           recordEmotionSnapshot(emotion as string, conf);
           const value = EMOTION_VALUE[emotion as string] ?? 5;
@@ -393,91 +437,87 @@ export default function WebcamEmotion({ onEmotionChange, sessionId, voiceEmotion
         )}
       </div>
 
-      {/* Emotion badge strip — shows combined face + voice when voice mode is active */}
-      <div className={`flex-none border-t border-border bg-card transition-all ${voiceEmotion ? "min-h-[72px] py-2" : "h-14"} flex flex-col justify-center px-4 gap-1.5`}>
-        {/* Face emotion row */}
-        <div className="flex items-center justify-between">
+      {/* ── Emotional Intelligence Panel ── */}
+      <div className="flex-none border-t border-white/6 bg-[#0a0c10] px-4 py-3 flex flex-col gap-2.5">
+        <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground/40 mb-0.5">Emotional Intelligence</p>
+
+        {/* Row 1 — Face */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm leading-none w-5 text-center flex-none">👁️</span>
+          <span className="text-[10px] text-muted-foreground/50 w-10 flex-none">Face</span>
           {emotionCfg && detectedEmotion ? (
             <>
-              <div className="flex items-center gap-1.5">
-                {voiceEmotion && (
-                  <span className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wide w-8">Face</span>
-                )}
-                <div className={`emotion-badge flex items-center gap-1.5 px-2.5 py-1 rounded-full ring-1 ${emotionCfg.bg} ${emotionCfg.text} ${emotionCfg.ring}`}>
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: emotionCfg.dot, boxShadow: `0 0 5px ${emotionCfg.dot}` }} />
-                  <span className="text-xs font-semibold">{emotionCfg.label}</span>
-                </div>
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 ${emotionCfg.bg} ${emotionCfg.text} ${emotionCfg.ring}`}>
+                <div className="w-1.5 h-1.5 rounded-full flex-none" style={{ backgroundColor: emotionCfg.dot }} />
+                {emotionCfg.label}
               </div>
-              {!voiceEmotion && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Confidence</span>
-                  <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.round(confidence * 100)}%`, backgroundColor: emotionCfg.dot }} />
-                  </div>
-                  <span className="text-xs font-medium tabular-nums" style={{ color: emotionCfg.dot }}>{Math.round(confidence * 100)}%</span>
-                </div>
-              )}
-              {voiceEmotion && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[9px] text-muted-foreground/40">{Math.round(confidence * 100)}%</span>
-                </div>
-              )}
+              <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.round(confidence * 100)}%`, backgroundColor: emotionCfg.dot, boxShadow: `0 0 6px ${emotionCfg.dot}60` }} />
+              </div>
+              <span className="text-[10px] tabular-nums text-muted-foreground/50 w-7 text-right flex-none">{Math.round(confidence * 100)}%</span>
             </>
           ) : (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              {status === "ready" ? (
-                <><div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" /><span className="text-xs">Scanning for face…</span></>
-              ) : status === "off" ? (
-                <><div className="w-2 h-2 rounded-full bg-muted-foreground/40" /><span className="text-xs">Camera off</span></>
-              ) : (
-                <><div className="w-2 h-2 rounded-full bg-muted-foreground" /><span className="text-xs">{modelsLoaded ? "Starting…" : "Loading…"}</span></>
-              )}
-            </div>
+            <span className="text-[10px] text-muted-foreground/30 italic">
+              {status === "ready" ? "Scanning…" : status === "off" ? "Camera off" : modelsLoaded ? "Starting…" : "Loading…"}
+            </span>
           )}
         </div>
 
-        {/* Voice emotion row + Overall — only in voice mode */}
-        {voiceEmotion && (() => {
-          const vColor = VOICE_EMOTION_COLORS[voiceEmotion.toLowerCase()] ?? "#9ca3af";
-          const overall = getOverallLabel(detectedEmotion as string | null, voiceEmotion);
-          return (
-            <>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] text-muted-foreground/60 font-medium uppercase tracking-wide w-8">Voice</span>
-                  <div
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
-                    style={{ backgroundColor: `${vColor}18`, color: vColor, boxShadow: `0 0 0 1px ${vColor}35` }}
-                  >
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: vColor, boxShadow: `0 0 5px ${vColor}` }} />
-                    <span className="capitalize">{voiceEmotion}</span>
-                  </div>
+        {/* Row 2 — Voice */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm leading-none w-5 text-center flex-none">🎙️</span>
+          <span className="text-[10px] text-muted-foreground/50 w-10 flex-none">Voice</span>
+          {voiceEmotion ? (() => {
+            const vColor = VOICE_EMOTION_COLORS[voiceEmotion.toLowerCase()] ?? "#9ca3af";
+            const topScore = voiceEmotionScores ? Math.max(...Object.values(voiceEmotionScores)) : 0;
+            return (
+              <>
+                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                  style={{ backgroundColor: `${vColor}18`, color: vColor, boxShadow: `0 0 0 1px ${vColor}35` }}>
+                  <div className="w-1.5 h-1.5 rounded-full flex-none" style={{ backgroundColor: vColor }} />
+                  <span className="capitalize">{voiceEmotion}</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] text-muted-foreground/60 uppercase tracking-wide">Overall</span>
-                  <div
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold capitalize"
-                    style={{ backgroundColor: `${overall.color}20`, color: overall.color }}
-                  >
-                    {overall.label}
-                  </div>
+                <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.round(topScore * 100)}%`, backgroundColor: vColor, boxShadow: `0 0 6px ${vColor}60` }} />
                 </div>
+                <span className="text-[10px] tabular-nums text-muted-foreground/50 w-7 text-right flex-none">{Math.round(topScore * 100)}%</span>
+              </>
+            );
+          })() : (
+            <span className="text-[10px] text-muted-foreground/30 italic">Not active</span>
+          )}
+        </div>
+
+        {/* Row 3 — AI Reading */}
+        <div className="flex items-start gap-2">
+          <span className="text-sm leading-none w-5 text-center flex-none mt-0.5">🧠</span>
+          <span className="text-[10px] text-muted-foreground/50 w-10 flex-none mt-0.5">AI</span>
+          <div className="flex-1 min-h-[28px]">
+            {readingLoading && !aiReading ? (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="w-2.5 h-2.5 rounded-full border border-primary/40 border-t-primary animate-spin" />
+                <span className="text-[10px] text-muted-foreground/30 italic">Reading…</span>
               </div>
-              {/* Top voice emotion scores as micro-bar */}
-              {voiceEmotionScores && (
-                <div className="flex gap-0.5 h-1 rounded-full overflow-hidden mt-0.5">
-                  {Object.entries(voiceEmotionScores).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v]) => (
-                    <div key={k} className="flex-1 rounded-full" style={{ backgroundColor: VOICE_EMOTION_COLORS[k.toLowerCase()] ?? "#9ca3af", opacity: 0.4 + v * 0.6 }} title={`${k}: ${Math.round(v*100)}%`} />
-                  ))}
-                </div>
-              )}
-            </>
-          );
-        })()}
+            ) : aiReading ? (
+              <p
+                key={readingKey}
+                className="text-[10px] leading-relaxed text-foreground/75 italic"
+                style={{ animation: "eiFadeIn 0.8s ease-out forwards" }}
+              >
+                "{aiReading}"
+              </p>
+            ) : (
+              <span className="text-[10px] text-muted-foreground/25 italic">Waiting for emotion data…</span>
+            )}
+          </div>
+          {readingLoading && aiReading && (
+            <div className="flex-none w-2.5 h-2.5 rounded-full border border-primary/40 border-t-primary animate-spin mt-0.5" />
+          )}
+        </div>
       </div>
 
       {/* Emotion timeline chart */}
-      <div className="flex-none border-t border-border bg-[#0d0f14]" style={{ height: 120 }}>
+      <div className="flex-none border-t border-border bg-[#0d0f14]" style={{ height: 80 }}>
         {timeline.length >= 2 ? (
           <ResponsiveContainer width="100%" height={120}>
             <LineChart data={timeline} margin={{ top: 10, right: 12, left: 36, bottom: 6 }}>
