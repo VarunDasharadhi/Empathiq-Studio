@@ -20,6 +20,8 @@ interface EviInnerProps {
   onVoiceEmotion: (emotion: string | null, scores: Record<string, number> | null) => void;
   onExitVoice: () => void;
   faceEmotionCounts: Record<string, number>;
+  voiceGender: "masculine" | "feminine";
+  onVoiceGenderChange: (g: "masculine" | "feminine") => void;
 }
 
 interface Mode {
@@ -88,7 +90,7 @@ function SoundWave({ color }: { color: string }) {
 interface TxMsg { id: string; role: "user" | "assistant"; text: string; emotion: string | null; }
 
 // ── Inner component (inside VoiceProvider context) ───────────────────────────
-function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts }: EviInnerProps) {
+function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts, voiceGender, onVoiceGenderChange }: EviInnerProps) {
   const { connect, disconnect, readyState, messages, isMuted, mute, unmute } = useVoice();
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [transcript, setTranscript] = useState<TxMsg[]>([]);
@@ -204,14 +206,42 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
           <p className="text-[10px] text-muted-foreground">Hume EVI · Claude Haiku 4.5</p>
         </div>
 
-        {/* Live indicator */}
-        {isOpen && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium bg-red-500/12 text-red-300"
-            style={{ boxShadow: "0 0 0 1px rgba(248,113,113,0.35)" }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-            Live
+        <div className="flex items-center gap-2">
+          {/* Voice gender toggle — locked while session is live */}
+          <div className="flex items-center rounded-lg overflow-hidden border border-white/10 text-[10px] font-medium">
+            {(["feminine", "masculine"] as const).map((g) => {
+              const active = voiceGender === g;
+              return (
+                <button
+                  key={g}
+                  onClick={() => {
+                    if (active) return;
+                    if (isOpen) handleEndSession();
+                    onVoiceGenderChange(g);
+                  }}
+                  disabled={isOpen}
+                  title={isOpen ? "End session to change voice" : undefined}
+                  className="flex items-center gap-1 px-2.5 py-1 transition-all disabled:cursor-not-allowed"
+                  style={active
+                    ? { backgroundColor: g === "feminine" ? "rgba(244,114,182,0.2)" : "rgba(96,165,250,0.2)", color: g === "feminine" ? "#f472b6" : "#60a5fa" }
+                    : { color: "var(--muted-foreground)", backgroundColor: "transparent" }}
+                >
+                  <span>{g === "feminine" ? "♀" : "♂"}</span>
+                  <span className="capitalize">{g === "feminine" ? "Female" : "Male"}</span>
+                </button>
+              );
+            })}
           </div>
-        )}
+
+          {/* Live indicator */}
+          {isOpen && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium bg-red-500/12 text-red-300"
+              style={{ boxShadow: "0 0 0 1px rgba(248,113,113,0.35)" }}>
+              <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+              Live
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Mode tabs — always interactive ── */}
@@ -396,15 +426,26 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   );
 }
 
+type VoiceGender = "masculine" | "feminine";
+
+const VOICE_LABELS: Record<VoiceGender, { label: string; subtitle: string; icon: string }> = {
+  masculine: { label: "Male",   subtitle: "ITO",  icon: "♂" },
+  feminine:  { label: "Female", subtitle: "KORA", icon: "♀" },
+};
+
 // ── Outer wrapper ─────────────────────────────────────────────────────────────
 export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: _sessionId, faceEmotionCounts }: Props) {
+  const [voiceGender, setVoiceGender] = useState<VoiceGender>("feminine");
   const [config, setConfig] = useState<HumeConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Re-fetch config whenever voice gender changes
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/hume/token")
+    setLoading(true);
+    setError(null);
+    fetch(`/api/hume/token?voice=${voiceGender}`)
       .then((r) => r.json())
       .then((d: unknown) => {
         if (cancelled) return;
@@ -418,7 +459,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
       .catch(() => { if (!cancelled) setError("Could not reach the server."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, []);
+  }, [voiceGender]);
 
   // Raw message handler — runs before the SDK builds its messages array,
   // so models.prosody.scores is still intact here.
@@ -468,6 +509,8 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
         onVoiceEmotion={onVoiceEmotion}
         onExitVoice={onExitVoice}
         faceEmotionCounts={faceEmotionCounts}
+        voiceGender={voiceGender}
+        onVoiceGenderChange={setVoiceGender}
       />
     </VoiceProvider>
   );
