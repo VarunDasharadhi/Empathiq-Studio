@@ -24,13 +24,13 @@ declare global {
 const MODELS_CDN = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
 
 const EMOTION_CONFIG: Record<string, { label: string; bg: string; text: string; ring: string; dot: string }> = {
-  happy:    { label: "Happy",     bg: "bg-yellow-400/20", text: "text-yellow-300",  ring: "ring-yellow-400/40",  dot: "#facc15" },
-  sad:      { label: "Sad",       bg: "bg-blue-500/20",   text: "text-blue-300",    ring: "ring-blue-400/40",    dot: "#60a5fa" },
-  angry:    { label: "Angry",     bg: "bg-red-500/20",    text: "text-red-300",     ring: "ring-red-400/40",     dot: "#f87171" },
-  fearful:  { label: "Fearful",   bg: "bg-purple-500/20", text: "text-purple-300",  ring: "ring-purple-400/40",  dot: "#c084fc" },
-  disgusted:{ label: "Disgusted", bg: "bg-green-500/20",  text: "text-green-300",   ring: "ring-green-400/40",   dot: "#4ade80" },
-  surprised:{ label: "Surprised", bg: "bg-orange-500/20", text: "text-orange-300",  ring: "ring-orange-400/40",  dot: "#fb923c" },
-  neutral:  { label: "Neutral",   bg: "bg-gray-500/20",   text: "text-gray-300",    ring: "ring-gray-400/40",    dot: "#9ca3af" },
+  happy:     { label: "Happy",     bg: "bg-yellow-400/20", text: "text-yellow-300",  ring: "ring-yellow-400/40",  dot: "#facc15" },
+  sad:       { label: "Sad",       bg: "bg-blue-500/20",   text: "text-blue-300",    ring: "ring-blue-400/40",    dot: "#60a5fa" },
+  angry:     { label: "Angry",     bg: "bg-red-500/20",    text: "text-red-300",     ring: "ring-red-400/40",     dot: "#f87171" },
+  fearful:   { label: "Fearful",   bg: "bg-purple-500/20", text: "text-purple-300",  ring: "ring-purple-400/40",  dot: "#c084fc" },
+  disgusted: { label: "Disgusted", bg: "bg-green-500/20",  text: "text-green-300",   ring: "ring-green-400/40",   dot: "#4ade80" },
+  surprised: { label: "Surprised", bg: "bg-orange-500/20", text: "text-orange-300",  ring: "ring-orange-400/40",  dot: "#fb923c" },
+  neutral:   { label: "Neutral",   bg: "bg-gray-500/20",   text: "text-gray-300",    ring: "ring-gray-400/40",    dot: "#9ca3af" },
 };
 
 interface Props {
@@ -38,7 +38,7 @@ interface Props {
   sessionId: number | null;
 }
 
-type Status = "loading-models" | "requesting-camera" | "ready" | "no-camera" | "error";
+type Status = "loading-models" | "requesting-camera" | "ready" | "off" | "no-camera" | "error";
 
 export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -48,6 +48,7 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const detectionRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionIdRef = useRef<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -73,19 +74,33 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
     }
   };
 
+  const stopCamera = useCallback(() => {
+    if (detectionRef.current) {
+      clearInterval(detectionRef.current);
+      detectionRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setDetectedEmotion(null);
+    setConfidence(0);
+    onEmotionChange(null);
+  }, [onEmotionChange]);
+
   const startDetection = useCallback(() => {
     if (detectionRef.current) clearInterval(detectionRef.current);
-
     detectionRef.current = setInterval(async () => {
       const video = videoRef.current;
       if (!video || !window.faceapi || video.readyState < 2) return;
-
       try {
         const options = new window.faceapi.TinyFaceDetectorOptions();
         const result = await window.faceapi
           .detectSingleFace(video, options)
           .withFaceExpressions();
-
         if (result?.expressions) {
           const { emotion, confidence: conf } = getDominantEmotion(result.expressions);
           setDetectedEmotion(emotion);
@@ -99,13 +114,14 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
     }, 2500);
   }, [onEmotionChange]);
 
-  const startWebcam = useCallback(async () => {
+  const startCamera = useCallback(async () => {
     setStatus("requesting-camera");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
+      streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
@@ -116,6 +132,15 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
       setStatus("no-camera");
     }
   }, [startDetection]);
+
+  const toggleCamera = useCallback(async () => {
+    if (status === "ready") {
+      stopCamera();
+      setStatus("off");
+    } else if (status === "off" || status === "no-camera") {
+      await startCamera();
+    }
+  }, [status, stopCamera, startCamera]);
 
   useEffect(() => {
     const waitForFaceApi = () =>
@@ -132,7 +157,7 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           window.faceapi.nets.faceExpressionNet.loadFromUri(MODELS_CDN),
         ]);
         setModelsLoaded(true);
-        await startWebcam();
+        await startCamera();
       } catch {
         setStatus("error");
       }
@@ -142,24 +167,57 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
 
     return () => {
       if (detectionRef.current) clearInterval(detectionRef.current);
-      if (videoRef.current?.srcObject) {
-        const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
-        tracks.forEach((t) => t.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
-  }, [startWebcam]);
+  }, [startCamera]);
 
   const emotionCfg = detectedEmotion ? EMOTION_CONFIG[detectedEmotion] : null;
+  const canToggle = status === "ready" || status === "off" || status === "no-camera";
 
   return (
     <div className="relative flex flex-col h-full bg-[#0a0c10]">
-      {/* Label */}
-      <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-md px-2.5 py-1.5">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-primary">
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-        </svg>
-        <span className="text-[11px] font-medium text-white/70">Emotion Sensor</span>
+      {/* Top bar */}
+      <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm rounded-md px-2.5 py-1.5">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-primary">
+            <circle cx="12" cy="12" r="4" />
+            <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+          </svg>
+          <span className="text-[11px] font-medium text-white/70">Emotion Sensor</span>
+        </div>
+
+        {/* Camera toggle button */}
+        {canToggle && (
+          <button
+            onClick={toggleCamera}
+            title={status === "ready" ? "Turn camera off" : "Turn camera on"}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md backdrop-blur-sm text-[11px] font-medium transition-all ${
+              status === "ready"
+                ? "bg-black/50 text-white/70 hover:bg-red-500/30 hover:text-red-300"
+                : "bg-black/50 text-white/50 hover:bg-primary/20 hover:text-primary"
+            }`}
+          >
+            {status === "ready" ? (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M23 7l-7 5 7 5V7z" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                </svg>
+                Off
+              </>
+            ) : (
+              <>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M23 7l-7 5 7 5V7z" />
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                </svg>
+                On
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Video */}
@@ -173,6 +231,7 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           style={{ transform: "scaleX(-1)" }}
         />
 
+        {/* Overlay states */}
         {status !== "ready" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0c10] gap-4">
             {status === "loading-models" && (
@@ -198,6 +257,27 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
                   <p className="text-sm font-medium text-foreground">Camera access needed</p>
                   <p className="text-xs text-muted-foreground mt-1">Allow camera permission in your browser</p>
                 </div>
+              </>
+            )}
+            {status === "off" && (
+              <>
+                <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-muted-foreground">
+                    <path d="M23 7l-7 5 7 5V7z" />
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+                    <line x1="2" y1="2" x2="22" y2="22" />
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-foreground">Camera is off</p>
+                  <p className="text-xs text-muted-foreground mt-1">Click "On" to resume emotion detection</p>
+                </div>
+                <button
+                  onClick={toggleCamera}
+                  className="mt-1 px-4 py-2 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+                >
+                  Turn camera on
+                </button>
               </>
             )}
             {status === "no-camera" && (
@@ -229,8 +309,8 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
 
         {status === "ready" && (
           <>
-            <div className="absolute top-8 left-8 w-8 h-8 border-l-2 border-t-2 border-primary/40 rounded-tl" />
-            <div className="absolute top-8 right-8 w-8 h-8 border-r-2 border-t-2 border-primary/40 rounded-tr" />
+            <div className="absolute top-10 left-8 w-8 h-8 border-l-2 border-t-2 border-primary/40 rounded-tl" />
+            <div className="absolute top-10 right-8 w-8 h-8 border-r-2 border-t-2 border-primary/40 rounded-tr" />
             <div className="absolute bottom-16 left-8 w-8 h-8 border-l-2 border-b-2 border-primary/40 rounded-bl" />
             <div className="absolute bottom-16 right-8 w-8 h-8 border-r-2 border-b-2 border-primary/40 rounded-br" />
           </>
@@ -262,6 +342,8 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           <div className="flex items-center gap-2 text-muted-foreground">
             {status === "ready" ? (
               <><div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" /><span className="text-xs">Scanning for face…</span></>
+            ) : status === "off" ? (
+              <><div className="w-2 h-2 rounded-full bg-muted-foreground/40" /><span className="text-xs">Camera off — emotion paused</span></>
             ) : (
               <><div className="w-2 h-2 rounded-full bg-muted-foreground" /><span className="text-xs">{modelsLoaded ? "Camera starting…" : "Loading…"}</span></>
             )}
