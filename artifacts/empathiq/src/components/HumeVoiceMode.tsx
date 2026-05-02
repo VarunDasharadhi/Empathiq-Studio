@@ -91,7 +91,7 @@ interface TxMsg { id: string; role: "user" | "assistant"; text: string; emotion:
 
 // ── Inner component (inside VoiceProvider context) ───────────────────────────
 function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts, voiceGender, onVoiceGenderChange }: EviInnerProps) {
-  const { connect, disconnect, readyState, messages, isMuted, mute, unmute } = useVoice();
+  const { connect, disconnect, readyState, messages, isMuted, mute, unmute, sendSessionSettings } = useVoice();
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [transcript, setTranscript] = useState<TxMsg[]>([]);
   const [topVoiceEmotion, setTopVoiceEmotion] = useState<string | null>(null);
@@ -100,6 +100,33 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   const processedCount = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const assistantTurnIdRef = useRef<string | null>(null);
+
+  const [customPrompts, setCustomPrompts] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem("empathiq_prompts") ?? "{}") as Record<string, string>; } catch { return {}; }
+  });
+  const [editingModeId, setEditingModeId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+
+  const openEditor = (mode: Mode) => {
+    setEditingModeId(mode.id);
+    setEditDraft(customPrompts[mode.id] ?? mode.systemPrompt);
+  };
+
+  const savePrompt = () => {
+    if (!editingModeId) return;
+    const mode = MODES.find((m) => m.id === editingModeId);
+    if (!mode) return;
+    const trimmed = editDraft.trim();
+    const next = { ...customPrompts };
+    if (!trimmed || trimmed === mode.systemPrompt) {
+      delete next[editingModeId];
+    } else {
+      next[editingModeId] = trimmed;
+    }
+    setCustomPrompts(next);
+    localStorage.setItem("empathiq_prompts", JSON.stringify(next));
+    setEditingModeId(null);
+  };
 
   const isOpen = readyState === VoiceReadyState.OPEN;
   const isConnecting = readyState === VoiceReadyState.CONNECTING;
@@ -161,6 +188,15 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
       assistantTurnIdRef.current = null;
     }
   }, [readyState, onVoiceEmotion]);
+
+  // Send custom system prompt via session settings when session becomes live
+  useEffect(() => {
+    if (readyState === VoiceReadyState.OPEN) {
+      const prompt = customPrompts[activeMode.id] ?? activeMode.systemPrompt;
+      sendSessionSettings({ systemPrompt: prompt });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyState]);
 
   const handleStartSession = useCallback(() => {
     setConnectError(null);
@@ -249,15 +285,13 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
         <div className="flex gap-1 px-3 py-2 overflow-x-auto no-scrollbar">
           {MODES.map((mode) => {
             const isActive = mode.id === activeMode.id;
+            const hasCustom = !!customPrompts[mode.id];
             return (
               <button
                 key={mode.id}
                 onClick={() => {
                   setActiveMode(mode);
-                  // If a session is live, end it — mode change takes effect on next connect
-                  if (isOpen) {
-                    handleEndSession();
-                  }
+                  if (isOpen) handleEndSession();
                 }}
                 className="flex-none flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium whitespace-nowrap transition-all"
                 style={isActive
@@ -266,6 +300,26 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
               >
                 <span>{mode.emoji}</span>
                 {mode.label}
+                {hasCustom && !isActive && (
+                  <span className="w-1 h-1 rounded-full opacity-60" style={{ backgroundColor: mode.color }} />
+                )}
+                {isActive && (
+                  <span
+                    role="button"
+                    onClick={(e) => { e.stopPropagation(); openEditor(mode); }}
+                    className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer"
+                    title="Edit system prompt"
+                  >
+                    {hasCustom ? (
+                      <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: mode.color }} />
+                    ) : (
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    )}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -422,6 +476,75 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
           {isConnecting ? "Connecting to EVI…" : isOpen ? "Tap to end session" : "Tap mic to start"}
         </p>
       </div>
+
+      {/* ── Prompt editor modal ── */}
+      {editingModeId && (() => {
+        const mode = MODES.find((m) => m.id === editingModeId)!;
+        const isModified = !!editDraft.trim() && editDraft.trim() !== mode.systemPrompt;
+        return (
+          <div
+            className="absolute inset-0 z-50 flex items-center justify-center p-4"
+            style={{ backgroundColor: "rgba(0,0,0,0.82)", backdropFilter: "blur(6px)" }}
+            onClick={(e) => { if (e.target === e.currentTarget) setEditingModeId(null); }}
+          >
+            <div className="w-full max-w-sm rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden"
+              style={{ backgroundColor: "#0d0d12" }}>
+              <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/8">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-lg flex-none"
+                  style={{ backgroundColor: `${mode.color}18` }}>
+                  {mode.emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-foreground">{mode.label} — System Prompt</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Customize how this mode responds</p>
+                </div>
+                <button onClick={() => setEditingModeId(null)} className="flex-none text-muted-foreground hover:text-foreground transition-colors p-1">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="px-4 py-3.5">
+                <textarea
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  rows={7}
+                  autoFocus
+                  className="w-full resize-none rounded-xl text-xs px-3.5 py-3 focus:outline-none transition-all leading-relaxed"
+                  style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: "var(--foreground)" }}
+                  placeholder="Enter the system prompt for this mode…"
+                />
+                <div className="flex justify-between items-center mt-1.5">
+                  <span className="text-[10px] text-muted-foreground">{editDraft.length} chars</span>
+                  {isModified && <span className="text-[10px] font-medium" style={{ color: mode.color }}>● Customized</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-3 border-t border-white/8">
+                <button
+                  onClick={() => setEditDraft(mode.systemPrompt)}
+                  className="text-[11px] text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg hover:bg-white/5 transition-all"
+                >
+                  Reset
+                </button>
+                <div className="flex-1" />
+                <button
+                  onClick={() => setEditingModeId(null)}
+                  className="text-[11px] px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/8 text-muted-foreground hover:text-foreground transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={savePrompt}
+                  className="text-[11px] px-3.5 py-1.5 rounded-lg font-medium text-foreground transition-all"
+                  style={{ backgroundColor: `${mode.color}25`, boxShadow: `0 0 0 1px ${mode.color}55` }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

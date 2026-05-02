@@ -271,6 +271,33 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const interimRef = useRef("");
 
+  const [customPrompts, setCustomPrompts] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem("empathiq_prompts") ?? "{}") as Record<string, string>; } catch { return {}; }
+  });
+  const [editingModeId, setEditingModeId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+
+  const openEditor = (mode: Mode) => {
+    setEditingModeId(mode.id);
+    setEditDraft(customPrompts[mode.id] ?? mode.systemPrompt);
+  };
+
+  const savePrompt = () => {
+    if (!editingModeId) return;
+    const mode = MODES.find((m) => m.id === editingModeId);
+    if (!mode) return;
+    const trimmed = editDraft.trim();
+    const next = { ...customPrompts };
+    if (!trimmed || trimmed === mode.systemPrompt) {
+      delete next[editingModeId];
+    } else {
+      next[editingModeId] = trimmed;
+    }
+    setCustomPrompts(next);
+    localStorage.setItem("empathiq_prompts", JSON.stringify(next));
+    setEditingModeId(null);
+  };
+
   useEffect(() => { setMessages([]); setCurrentCoherence(null); }, [sessionId]);
 
   useEffect(() => {
@@ -348,7 +375,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages, systemPrompt: activeMode.systemPrompt }),
+        body: JSON.stringify({ messages: apiMessages, systemPrompt: customPrompts[activeMode.id] ?? activeMode.systemPrompt }),
       });
 
       if (!res.ok) throw new Error("API error");
@@ -466,17 +493,39 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       <div className="flex-none px-4 pt-3 pb-2 flex gap-2 overflow-x-auto scrollbar-none">
         {MODES.map((mode) => {
           const isActive = mode.id === activeMode.id;
+          const hasCustom = !!customPrompts[mode.id];
           return (
             <button
               key={mode.id}
               onClick={() => handleModeChange(mode)}
-              className="flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 whitespace-nowrap"
+              className="flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 whitespace-nowrap group"
               style={isActive
                 ? { backgroundColor: `${mode.color}18`, color: mode.color, boxShadow: `0 0 0 1.5px ${mode.color}, 0 0 12px ${mode.glow}`, animation: "modePulse 2.5s ease-in-out infinite" }
                 : { backgroundColor: "transparent", color: "var(--muted-foreground)", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }
               }
             >
-              <span>{mode.emoji}</span><span>{mode.label}</span>
+              <span>{mode.emoji}</span>
+              <span>{mode.label}</span>
+              {hasCustom && !isActive && (
+                <span className="w-1 h-1 rounded-full opacity-60" style={{ backgroundColor: mode.color }} />
+              )}
+              {isActive && (
+                <span
+                  role="button"
+                  onClick={(e) => { e.stopPropagation(); openEditor(mode); }}
+                  className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer"
+                  title="Edit system prompt"
+                >
+                  {hasCustom ? (
+                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: mode.color }} />
+                  ) : (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  )}
+                </span>
+              )}
             </button>
           );
         })}
@@ -675,6 +724,75 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
           <span className="text-[10px] text-muted-foreground/40 tracking-wide">Powered by Claude</span>
         </div>
       </div>
+
+      {/* ── Prompt editor modal ── */}
+      {editingModeId && (() => {
+        const mode = MODES.find((m) => m.id === editingModeId)!;
+        const isModified = !!editDraft.trim() && editDraft.trim() !== mode.systemPrompt;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ backgroundColor: "rgba(0,0,0,0.78)", backdropFilter: "blur(6px)" }}
+            onClick={(e) => { if (e.target === e.currentTarget) setEditingModeId(null); }}
+          >
+            <div className="w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden"
+              style={{ backgroundColor: "#0d0d12" }}>
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-white/8">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl flex-none"
+                  style={{ backgroundColor: `${mode.color}18` }}>
+                  {mode.emoji}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{mode.label} — System Prompt</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Customize how this mode thinks and responds</p>
+                </div>
+                <button onClick={() => setEditingModeId(null)} className="flex-none text-muted-foreground hover:text-foreground transition-colors p-1">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="px-5 py-4">
+                <textarea
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  rows={8}
+                  autoFocus
+                  className="w-full resize-none rounded-xl text-sm px-4 py-3 focus:outline-none focus:ring-2 transition-all leading-relaxed"
+                  style={{ backgroundColor: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)", color: "var(--foreground)", focusRingColor: mode.color } as React.CSSProperties}
+                  placeholder="Enter the system prompt for this mode…"
+                />
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-[10px] text-muted-foreground">{editDraft.length} chars</span>
+                  {isModified && <span className="text-[10px] font-medium" style={{ color: mode.color }}>● Customized</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-5 py-3.5 border-t border-white/8">
+                <button
+                  onClick={() => setEditDraft(mode.systemPrompt)}
+                  className="text-xs text-muted-foreground hover:text-foreground px-3 py-2 rounded-lg hover:bg-white/5 transition-all"
+                >
+                  Reset to default
+                </button>
+                <div className="flex-1" />
+                <button
+                  onClick={() => setEditingModeId(null)}
+                  className="text-xs px-4 py-2 rounded-lg bg-white/5 hover:bg-white/8 text-muted-foreground hover:text-foreground transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={savePrompt}
+                  className="text-xs px-4 py-2 rounded-lg font-medium text-foreground transition-all"
+                  style={{ backgroundColor: `${mode.color}25`, boxShadow: `0 0 0 1px ${mode.color}55` }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
