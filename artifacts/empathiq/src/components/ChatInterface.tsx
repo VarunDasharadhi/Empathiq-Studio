@@ -8,6 +8,59 @@ interface Message {
   emotion?: Emotion;
 }
 
+interface Mode {
+  id: string;
+  label: string;
+  emoji: string;
+  systemPrompt: string;
+  color: string;
+  glow: string;
+  starters: string[];
+}
+
+const MODES: Mode[] = [
+  {
+    id: "therapist",
+    label: "Therapist",
+    emoji: "🧠",
+    color: "#818cf8",
+    glow: "rgba(129,140,248,0.45)",
+    systemPrompt:
+      "You are EmpathIQ acting as a compassionate, gentle therapist. Use CBT-style techniques: validate feelings first, then gently explore thoughts and patterns. Ask one open question at a time. Never diagnose. Be warm, non-judgmental, and give space for the person to reflect. Keep responses concise and human.",
+    starters: ["How are you feeling today?", "I need someone to talk to.", "I've been struggling lately."],
+  },
+  {
+    id: "dating",
+    label: "Dating Coach",
+    emoji: "💘",
+    color: "#f472b6",
+    glow: "rgba(244,114,182,0.45)",
+    systemPrompt:
+      "You are EmpathIQ acting as a confident, playful dating coach. Read the user's emotional energy and give sharp, honest advice about attraction, connection, and relationships. Be fun and a little cheeky — never preachy. Help them understand their own patterns and build genuine confidence. Keep it real, not cheesy.",
+    starters: ["There's someone I like but I don't know what to say.", "How do I seem more confident?", "Why do I keep attracting the wrong people?"],
+  },
+  {
+    id: "sales",
+    label: "Sales Coach",
+    emoji: "💼",
+    color: "#34d399",
+    glow: "rgba(52,211,153,0.45)",
+    systemPrompt:
+      "You are EmpathIQ acting as a sharp, energetic sales coach. Help the user handle objections, close deals, build rapport, and sharpen their pitch. Be direct, tactical, and motivating. Use real-world sales frameworks (SPIN, MEDDIC, challenger, etc.) when helpful. Push them to think bigger and execute better.",
+    starters: ["My prospect keeps ghosting me.", "How do I handle price objections?", "Help me tighten my pitch."],
+  },
+  {
+    id: "meditation",
+    label: "Meditation",
+    emoji: "🧘",
+    color: "#67e8f9",
+    glow: "rgba(103,232,249,0.45)",
+    systemPrompt:
+      "You are EmpathIQ acting as a calm, grounding meditation guide. Speak slowly and softly. Offer breathwork exercises, body scans, grounding techniques, and mindfulness prompts tailored to the user's current emotional state. Use gentle, spacious language. Pause with ellipses. Help them arrive in the present moment.",
+    starters: ["I'm feeling anxious and need to calm down.", "Guide me through a quick breathing exercise.", "Help me clear my mind."],
+  },
+];
+
 interface Props {
   currentEmotion: Emotion;
   sessionId: number | null;
@@ -43,16 +96,24 @@ async function saveMessage(
 }
 
 export default function ChatInterface({ currentEmotion, sessionId }: Props) {
+  const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Reset messages when session changes
   useEffect(() => {
     setMessages([]);
   }, [sessionId]);
+
+  const handleModeChange = (mode: Mode) => {
+    if (mode.id === activeMode.id) return;
+    setActiveMode(mode);
+    setMessages([]);
+    setInput("");
+    inputRef.current?.focus();
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -95,7 +156,10 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages }),
+        body: JSON.stringify({
+          messages: apiMessages,
+          systemPrompt: activeMode.systemPrompt,
+        }),
       });
 
       if (!res.ok) throw new Error("API error");
@@ -123,7 +187,7 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
       setIsTyping(false);
       inputRef.current?.focus();
     }
-  }, [input, isTyping, messages, currentEmotion, sessionId]);
+  }, [input, isTyping, messages, currentEmotion, sessionId, activeMode]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -165,23 +229,55 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
         </div>
       </div>
 
+      {/* Mode selector */}
+      <div className="flex-none px-4 pt-3 pb-2 flex gap-2 overflow-x-auto scrollbar-none">
+        {MODES.map((mode) => {
+          const isActive = mode.id === activeMode.id;
+          return (
+            <button
+              key={mode.id}
+              onClick={() => handleModeChange(mode)}
+              className="flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 whitespace-nowrap"
+              style={
+                isActive
+                  ? {
+                      backgroundColor: `${mode.color}18`,
+                      color: mode.color,
+                      boxShadow: `0 0 0 1.5px ${mode.color}, 0 0 12px ${mode.glow}`,
+                      animation: "modePulse 2.5s ease-in-out infinite",
+                    }
+                  : {
+                      backgroundColor: "transparent",
+                      color: "var(--muted-foreground)",
+                      boxShadow: "0 0 0 1px var(--border)",
+                    }
+              }
+            >
+              <span>{mode.emoji}</span>
+              <span>{mode.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 pb-8">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
+              style={{ backgroundColor: `${activeMode.color}18`, boxShadow: `0 0 0 1px ${activeMode.color}30` }}
+            >
+              {activeMode.emoji}
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">Start a conversation</p>
+              <p className="text-sm font-semibold text-foreground">{activeMode.label} ready</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">
                 EmpathIQ reads your facial expression and responds with emotional intelligence
               </p>
             </div>
             <div className="grid grid-cols-1 gap-2 w-full max-w-[280px]">
-              {["How are you feeling today?", "I need someone to talk to.", "Tell me something uplifting."].map((s) => (
+              {activeMode.starters.map((s) => (
                 <button
                   key={s}
                   onClick={() => { setInput(s); inputRef.current?.focus(); }}
@@ -197,10 +293,11 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
         {messages.map((msg) => (
           <div key={msg.id} className={`message-enter flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             {msg.role === "assistant" && (
-              <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="text-primary">
-                  <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z" />
-                </svg>
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5 text-sm"
+                style={{ backgroundColor: `${activeMode.color}20` }}
+              >
+                {activeMode.emoji}
               </div>
             )}
             <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
@@ -228,10 +325,11 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
 
         {isTyping && (
           <div className="message-enter flex justify-start">
-            <div className="w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="text-primary">
-                <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15v-4H7l5-8v4h4l-5 8z" />
-              </svg>
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mr-2.5 mt-0.5 text-sm"
+              style={{ backgroundColor: `${activeMode.color}20` }}
+            >
+              {activeMode.emoji}
             </div>
             <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground typing-dot" />
@@ -260,7 +358,7 @@ export default function ChatInterface({ currentEmotion, sessionId }: Props) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message… (Enter to send)"
+            placeholder={`Message ${activeMode.label}… (Enter to send)`}
             rows={1}
             className="flex-1 resize-none rounded-xl bg-muted border border-border text-foreground placeholder:text-muted-foreground text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all min-h-[46px] max-h-[120px] scrollbar-thin"
             style={{ fieldSizing: "content" } as React.CSSProperties}

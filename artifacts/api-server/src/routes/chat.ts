@@ -5,12 +5,15 @@ const router: IRouter = Router();
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `You are EmpathIQ, an emotionally intelligent AI companion. You will always receive the user's current facial emotion as [EMOTION: X] at the start of their message. Respond with empathy calibrated to that emotion. Never mention you can see their face — just naturally reflect their emotional state in your tone. Be warm, wise, and human.`;
+const BASE_SUFFIX = `\n\nYou will always receive the user's current facial emotion as [EMOTION: X] at the start of their message. Calibrate your response tone to that emotion naturally — never mention that you can see their face.`;
+
+const DEFAULT_SYSTEM_PROMPT = `You are EmpathIQ, an emotionally intelligent AI companion. Be warm, wise, and human.${BASE_SUFFIX}`;
 
 router.post("/chat", async (req, res) => {
   try {
-    const { messages } = req.body as {
+    const { messages, systemPrompt } = req.body as {
       messages: Array<{ role: "user" | "assistant"; content: string }>;
+      systemPrompt?: string;
     };
 
     if (!messages || !Array.isArray(messages)) {
@@ -18,10 +21,14 @@ router.post("/chat", async (req, res) => {
       return;
     }
 
+    const system = systemPrompt
+      ? `${systemPrompt}${BASE_SUFFIX}`
+      : DEFAULT_SYSTEM_PROMPT;
+
     const response = await client.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system,
       messages,
     });
 
