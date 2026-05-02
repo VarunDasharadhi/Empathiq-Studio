@@ -1,4 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  LineChart,
+  Line,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import type { Emotion } from "@/App";
 
 declare global {
@@ -33,6 +40,32 @@ const EMOTION_CONFIG: Record<string, { label: string; bg: string; text: string; 
   neutral:   { label: "Neutral",   bg: "bg-gray-500/20",   text: "text-gray-300",    ring: "ring-gray-400/40",    dot: "#9ca3af" },
 };
 
+const EMOTION_VALUE: Record<string, number> = {
+  happy: 7,
+  surprised: 6,
+  neutral: 5,
+  fearful: 4,
+  sad: 3,
+  disgusted: 2,
+  angry: 1,
+};
+
+const VALUE_LABEL: Record<number, string> = {
+  7: "Happy",
+  6: "Surp.",
+  5: "Neut.",
+  4: "Fear.",
+  3: "Sad",
+  2: "Disg.",
+  1: "Angry",
+};
+
+interface TimelinePoint {
+  t: number;
+  value: number;
+  emotion: string;
+}
+
 interface Props {
   onEmotionChange: (emotion: Emotion) => void;
   sessionId: number | null;
@@ -40,15 +73,41 @@ interface Props {
 
 type Status = "loading-models" | "requesting-camera" | "ready" | "off" | "no-camera" | "error";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomYTick = ({ x, y, payload }: any) => {
+  const label = VALUE_LABEL[payload.value as number];
+  if (!label) return null;
+  return (
+    <text x={x - 2} y={y} textAnchor="end" dominantBaseline="middle" fill="#6b7280" fontSize={9}>
+      {label}
+    </text>
+  );
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CustomTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const point = payload[0].payload as TimelinePoint;
+  const cfg = EMOTION_CONFIG[point.emotion];
+  if (!cfg) return null;
+  return (
+    <div className="bg-[#1a1d24] border border-border rounded px-2 py-1 text-[10px]" style={{ color: cfg.dot }}>
+      {cfg.label}
+    </div>
+  );
+};
+
 export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>("loading-models");
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion>(null);
   const [confidence, setConfidence] = useState(0);
   const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [timeline, setTimeline] = useState<TimelinePoint[]>([]);
   const detectionRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionIdRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const tickRef = useRef(0);
 
   useEffect(() => {
     sessionIdRef.current = sessionId;
@@ -107,6 +166,13 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           setConfidence(conf);
           onEmotionChange(emotion);
           recordEmotionSnapshot(emotion as string, conf);
+
+          const value = EMOTION_VALUE[emotion as string] ?? 5;
+          const t = tickRef.current++;
+          setTimeline((prev) => {
+            const next = [...prev, { t, value, emotion: emotion as string }];
+            return next.length > 20 ? next.slice(next.length - 20) : next;
+          });
         }
       } catch {
         // silently continue
@@ -174,6 +240,7 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
   }, [startCamera]);
 
   const emotionCfg = detectedEmotion ? EMOTION_CONFIG[detectedEmotion] : null;
+  const lineColor = emotionCfg?.dot ?? "#6b7280";
   const canToggle = status === "ready" || status === "off" || status === "no-camera";
 
   return (
@@ -188,7 +255,6 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           <span className="text-[11px] font-medium text-white/70">Emotion Sensor</span>
         </div>
 
-        {/* Camera toggle button */}
         {canToggle && (
           <button
             onClick={toggleCamera}
@@ -199,23 +265,11 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
                 : "bg-black/50 text-white/50 hover:bg-primary/20 hover:text-primary"
             }`}
           >
-            {status === "ready" ? (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M23 7l-7 5 7 5V7z" />
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                </svg>
-                Off
-              </>
-            ) : (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M23 7l-7 5 7 5V7z" />
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                </svg>
-                On
-              </>
-            )}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M23 7l-7 5 7 5V7z" />
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+            </svg>
+            {status === "ready" ? "Off" : "On"}
           </button>
         )}
       </div>
@@ -231,7 +285,6 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           style={{ transform: "scaleX(-1)" }}
         />
 
-        {/* Overlay states */}
         {status !== "ready" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0c10] gap-4">
             {status === "loading-models" && (
@@ -311,8 +364,8 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
           <>
             <div className="absolute top-10 left-8 w-8 h-8 border-l-2 border-t-2 border-primary/40 rounded-tl" />
             <div className="absolute top-10 right-8 w-8 h-8 border-r-2 border-t-2 border-primary/40 rounded-tr" />
-            <div className="absolute bottom-16 left-8 w-8 h-8 border-l-2 border-b-2 border-primary/40 rounded-bl" />
-            <div className="absolute bottom-16 right-8 w-8 h-8 border-r-2 border-b-2 border-primary/40 rounded-br" />
+            <div className="absolute bottom-4 left-8 w-8 h-8 border-l-2 border-b-2 border-primary/40 rounded-bl" />
+            <div className="absolute bottom-4 right-8 w-8 h-8 border-r-2 border-b-2 border-primary/40 rounded-br" />
           </>
         )}
       </div>
@@ -347,6 +400,38 @@ export default function WebcamEmotion({ onEmotionChange, sessionId }: Props) {
             ) : (
               <><div className="w-2 h-2 rounded-full bg-muted-foreground" /><span className="text-xs">{modelsLoaded ? "Camera starting…" : "Loading…"}</span></>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Emotion timeline chart */}
+      <div className="flex-none border-t border-border bg-[#0d0f14]" style={{ height: 120 }}>
+        {timeline.length >= 2 ? (
+          <ResponsiveContainer width="100%" height={120}>
+            <LineChart data={timeline} margin={{ top: 10, right: 12, left: 36, bottom: 6 }}>
+              <YAxis
+                domain={[1, 7]}
+                ticks={[1, 2, 3, 4, 5, 6, 7]}
+                tick={<CustomYTick />}
+                width={36}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip content={<CustomTooltip />} />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={lineColor}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 3, fill: lineColor, strokeWidth: 0 }}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-[10px] text-muted-foreground/50">Emotion timeline will appear here</p>
           </div>
         )}
       </div>
