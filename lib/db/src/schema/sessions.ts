@@ -9,6 +9,7 @@ export const sessionsTable = pgTable("sessions", {
   endedAt: timestamp("ended_at"),
   messageCount: integer("message_count").notNull().default(0),
   dominantEmotion: text("dominant_emotion"),
+  summary: text("summary"),
 });
 
 export const sessionMessagesTable = pgTable("session_messages", {

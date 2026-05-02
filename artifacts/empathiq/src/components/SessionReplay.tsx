@@ -18,8 +18,14 @@ interface EmotionSnapshot {
   recordedAt: string;
 }
 
+interface JournalSummary {
+  emotions: string;
+  themes: string;
+  takeaway: string;
+}
+
 interface SessionDetail {
-  session: Session;
+  session: Session & { summary?: string | null };
   messages: Message[];
   emotionTimeline: EmotionSnapshot[];
 }
@@ -41,17 +47,13 @@ function formatTime(iso: string): string {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    weekday: "long", month: "long", day: "numeric",
-  });
+  return new Date(iso).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 }
 
 function getEmotionBreakdown(snapshots: EmotionSnapshot[]): Array<{ emotion: string; count: number; pct: number }> {
   if (snapshots.length === 0) return [];
   const counts: Record<string, number> = {};
-  for (const s of snapshots) {
-    counts[s.emotion] = (counts[s.emotion] ?? 0) + 1;
-  }
+  for (const s of snapshots) counts[s.emotion] = (counts[s.emotion] ?? 0) + 1;
   const total = snapshots.length;
   return Object.entries(counts)
     .map(([emotion, count]) => ({ emotion, count, pct: Math.round((count / total) * 100) }))
@@ -66,6 +68,8 @@ interface Props {
 export default function SessionReplay({ session, onBack }: Props) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [journal, setJournal] = useState<JournalSummary | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -74,24 +78,42 @@ export default function SessionReplay({ session, onBack }: Props) {
         if (!res.ok) return;
         const data = await res.json() as SessionDetail;
         setDetail(data);
-      } catch {
-        // silently fail
-      } finally {
-        setLoading(false);
-      }
+
+        // Parse existing summary if present
+        if (data.session.summary) {
+          try {
+            const parsed = JSON.parse(data.session.summary) as JournalSummary;
+            setJournal(parsed);
+          } catch { /* skip */ }
+        }
+      } catch { /* silently fail */ }
+      finally { setLoading(false); }
     };
     load();
   }, [session.id]);
 
+  const generateSummary = async () => {
+    if (generatingSummary || !detail) return;
+    setGeneratingSummary(true);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/summary`, { method: "POST" });
+      if (!res.ok) return;
+      const data = await res.json() as { summary: JournalSummary };
+      if (data.summary) setJournal(data.summary);
+    } catch { /* silently fail */ }
+    finally { setGeneratingSummary(false); }
+  };
+
   const breakdown = detail ? getEmotionBreakdown(detail.emotionTimeline) : [];
+  const dominantColor = breakdown[0] ? (EMOTION_COLORS[breakdown[0].emotion] ?? "#9ca3af") : "#9ca3af";
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
       {/* Header */}
-      <div className="flex-none flex items-center gap-3 px-4 py-3.5 border-b border-border bg-card">
+      <div className="flex-none flex items-center gap-3 px-4 py-3.5 border-b border-white/8 bg-black/20">
         <button
           onClick={onBack}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
@@ -108,54 +130,90 @@ export default function SessionReplay({ session, onBack }: Props) {
           <div className="w-6 h-6 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
         </div>
       ) : !detail ? (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          Failed to load session
-        </div>
+        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Failed to load session</div>
       ) : (
         <div className="flex-1 overflow-y-auto scrollbar-thin">
-          {/* Emotion breakdown chart */}
+
+          {/* ── Mood Journal Card ── */}
+          <div className="mx-4 mt-4 mb-2">
+            {journal ? (
+              <div
+                className="rounded-xl border p-4 slide-down"
+                style={{
+                  borderColor: `${dominantColor}30`,
+                  background: `linear-gradient(135deg, ${dominantColor}08, transparent)`,
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center text-sm"
+                    style={{ backgroundColor: `${dominantColor}20` }}>
+                    📓
+                  </div>
+                  <p className="text-xs font-semibold text-foreground">Mood Journal</p>
+                  <span className="text-[10px] text-muted-foreground/60 ml-auto">AI-generated</span>
+                </div>
+                <div className="space-y-2.5">
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Emotional Journey</p>
+                    <p className="text-xs text-foreground/90 leading-relaxed">{journal.emotions}</p>
+                  </div>
+                  <div className="h-px bg-white/6" />
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Key Themes</p>
+                    <p className="text-xs text-foreground/90 leading-relaxed">{journal.themes}</p>
+                  </div>
+                  <div className="h-px bg-white/6" />
+                  <div className="rounded-lg p-2.5" style={{ backgroundColor: `${dominantColor}12` }}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: dominantColor }}>Takeaway</p>
+                    <p className="text-xs leading-relaxed" style={{ color: dominantColor }}>{journal.takeaway}</p>
+                  </div>
+                </div>
+              </div>
+            ) : detail.messages.length > 0 ? (
+              <button
+                onClick={generateSummary}
+                disabled={generatingSummary}
+                className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/12 bg-white/3 hover:bg-white/5 py-3.5 text-xs text-muted-foreground hover:text-foreground transition-all disabled:opacity-60"
+              >
+                {generatingSummary ? (
+                  <>
+                    <div className="w-3 h-3 rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground animate-spin" />
+                    Generating mood journal…
+                  </>
+                ) : (
+                  <>
+                    <span>📓</span>
+                    Generate mood journal entry
+                  </>
+                )}
+              </button>
+            ) : null}
+          </div>
+
+          {/* Emotion breakdown */}
           {breakdown.length > 0 && (
-            <div className="mx-4 mt-4 mb-2 rounded-xl border border-border bg-card p-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                Emotion Breakdown
-              </p>
+            <div className="mx-4 mb-2 rounded-xl border border-white/8 bg-white/3 p-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Emotion Breakdown</p>
               <div className="space-y-2.5">
                 {breakdown.map(({ emotion, pct }) => {
                   const color = EMOTION_COLORS[emotion] ?? "#9ca3af";
                   return (
                     <div key={emotion} className="flex items-center gap-3">
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: color }}
-                      />
-                      <span className="text-xs text-muted-foreground w-16 flex-shrink-0">
-                        {EMOTION_LABELS[emotion] ?? emotion}
-                      </span>
-                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${pct}%`, backgroundColor: color }}
-                        />
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                      <span className="text-xs text-muted-foreground w-16 flex-shrink-0">{EMOTION_LABELS[emotion] ?? emotion}</span>
+                      <div className="flex-1 h-1.5 bg-white/6 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
                       </div>
-                      <span className="text-xs font-medium tabular-nums w-8 text-right" style={{ color }}>
-                        {pct}%
-                      </span>
+                      <span className="text-xs font-medium tabular-nums w-8 text-right" style={{ color }}>{pct}%</span>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Dominant emotion summary */}
               {breakdown[0] && (
-                <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
+                <div className="mt-3 pt-3 border-t border-white/6 flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">Dominant emotion</span>
-                  <span
-                    className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                    style={{
-                      backgroundColor: `${EMOTION_COLORS[breakdown[0].emotion] ?? "#9ca3af"}20`,
-                      color: EMOTION_COLORS[breakdown[0].emotion] ?? "#9ca3af",
-                    }}
-                  >
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: `${EMOTION_COLORS[breakdown[0].emotion] ?? "#9ca3af"}20`, color: EMOTION_COLORS[breakdown[0].emotion] ?? "#9ca3af" }}>
                     {EMOTION_LABELS[breakdown[0].emotion] ?? breakdown[0].emotion}
                   </span>
                 </div>
@@ -165,10 +223,8 @@ export default function SessionReplay({ session, onBack }: Props) {
 
           {/* Emotion timeline strip */}
           {detail.emotionTimeline.length > 0 && (
-            <div className="mx-4 mb-2 rounded-xl border border-border bg-card p-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-                Emotion Timeline
-              </p>
+            <div className="mx-4 mb-2 rounded-xl border border-white/8 bg-white/3 p-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Emotion Timeline</p>
               <div className="flex gap-0.5 h-6 rounded overflow-hidden">
                 {detail.emotionTimeline.map((snap) => {
                   const color = EMOTION_COLORS[snap.emotion] ?? "#9ca3af";
@@ -183,16 +239,8 @@ export default function SessionReplay({ session, onBack }: Props) {
                 })}
               </div>
               <div className="flex justify-between mt-1.5">
-                <span className="text-[10px] text-muted-foreground">
-                  {formatTime(detail.emotionTimeline[0]?.recordedAt ?? detail.session.startedAt)}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {formatTime(
-                    detail.emotionTimeline[detail.emotionTimeline.length - 1]?.recordedAt ??
-                    detail.session.endedAt ??
-                    detail.session.startedAt
-                  )}
-                </span>
+                <span className="text-[10px] text-muted-foreground">{formatTime(detail.emotionTimeline[0]?.recordedAt ?? detail.session.startedAt)}</span>
+                <span className="text-[10px] text-muted-foreground">{formatTime(detail.emotionTimeline[detail.emotionTimeline.length - 1]?.recordedAt ?? detail.session.endedAt ?? detail.session.startedAt)}</span>
               </div>
             </div>
           )}
@@ -202,7 +250,6 @@ export default function SessionReplay({ session, onBack }: Props) {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mt-2 mb-1">
               Conversation ({detail.messages.length} messages)
             </p>
-
             {detail.messages.length === 0 ? (
               <div className="text-center py-8 text-xs text-muted-foreground">No messages in this session</div>
             ) : (
@@ -220,21 +267,17 @@ export default function SessionReplay({ session, onBack }: Props) {
                     <div className="max-w-[82%]">
                       {msg.role === "user" && color && msg.emotion && (
                         <div className="flex justify-end mb-1">
-                          <span
-                            className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
-                            style={{ backgroundColor: `${color}20`, color }}
-                          >
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                            style={{ backgroundColor: `${color}20`, color }}>
                             {EMOTION_LABELS[msg.emotion] ?? msg.emotion}
                           </span>
                         </div>
                       )}
-                      <div
-                        className={`rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${
-                          msg.role === "user"
-                            ? "bg-primary/80 text-primary-foreground rounded-br-sm"
-                            : "bg-card border border-border text-foreground rounded-bl-sm"
-                        }`}
-                      >
+                      <div className={`rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                        msg.role === "user"
+                          ? "bg-primary/80 text-primary-foreground rounded-br-sm"
+                          : "bg-white/5 border border-white/8 text-foreground rounded-bl-sm"
+                      }`}>
                         <p className="whitespace-pre-wrap">{msg.content}</p>
                       </div>
                       <p className={`text-[10px] text-muted-foreground mt-1 ${msg.role === "user" ? "text-right" : "text-left"}`}>
@@ -242,7 +285,7 @@ export default function SessionReplay({ session, onBack }: Props) {
                       </p>
                     </div>
                     {msg.role === "user" && (
-                      <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center flex-shrink-0 ml-2 mt-0.5">
+                      <div className="w-6 h-6 rounded-full bg-white/8 flex items-center justify-center flex-shrink-0 ml-2 mt-0.5">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="text-muted-foreground">
                           <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
                         </svg>
