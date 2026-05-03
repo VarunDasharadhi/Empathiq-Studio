@@ -344,6 +344,20 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
+  // Safety net: if the recognition instance disappears but isRecording never
+  // reset (browser onend silently failed), force-clear the stuck state.
+  useEffect(() => {
+    if (!isRecording) return;
+    const id = setInterval(() => {
+      if (!recognitionRef.current) {
+        setIsRecording(false);
+        setInterimText("");
+        setInterimIsFinal(false);
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [isRecording]);
+
   const sendMessage = useCallback(async (overrideText?: string) => {
     // Stop any in-progress recording so the user is never blocked by mic state
     if (recognitionRef.current) {
@@ -523,8 +537,14 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   startRecordingFnRef.current = startRecording;
 
   const stopRecording = useCallback(() => {
-    if (!recognitionRef.current) return;
-    recognitionRef.current.stop();
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    // Force-clear state immediately — don't rely on onend firing
+    setIsRecording(false);
+    setInterimText("");
+    setInterimIsFinal(false);
   }, []);
 
   const toggleRecording = useCallback(() => {
@@ -936,7 +956,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
             rows={1}
             className="flex-1 resize-none rounded-xl bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground text-sm px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all min-h-[46px] max-h-[120px] scrollbar-thin"
             style={{ fieldSizing: "content" } as React.CSSProperties}
-            disabled={isTyping || isRecording}
+            disabled={isTyping}
           />
           {speechSupported && (
             <div className="flex items-end gap-1">
