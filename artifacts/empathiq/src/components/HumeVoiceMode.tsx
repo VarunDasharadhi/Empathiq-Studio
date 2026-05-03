@@ -42,8 +42,6 @@ const MODES: Mode[] = [
     systemPrompt: "You are EmpathIQ acting as a sharp sales coach. Help handle objections, close deals, and sharpen pitches. Be direct, tactical, and motivating." },
   { id: "meditation", label: "Meditation", emoji: "🧘", color: "#67e8f9",
     systemPrompt: "You are EmpathIQ acting as a calm meditation guide. Offer breathwork, body scans, grounding. Use gentle, spacious language. Help them arrive in the present moment." },
-  { id: "smart-glasses", label: "Smart Glasses", emoji: "🥽", color: "#a78bfa",
-    systemPrompt: "You are a real-time social assistant. Give short, actionable coaching about what to say and how to read the other person's emotions. Be a silent expert in their ear." },
   { id: "anger-release", label: "Anger Release", emoji: "😤", color: "#f87171",
     systemPrompt: "You are a safe space. Let the user vent. Validate everything. Never judge. Help them decompress." },
   { id: "focus-coach", label: "Focus Coach", emoji: "🎯", color: "#fbbf24",

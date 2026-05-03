@@ -68,16 +68,6 @@ const MODES: Mode[] = [
     starters: ["I'm feeling anxious and need to calm down.", "Guide me through a quick breathing exercise.", "Help me clear my mind."],
   },
   {
-    id: "smart-glasses",
-    label: "Smart Glasses",
-    emoji: "🥽",
-    color: "#a78bfa",
-    glow: "rgba(167,139,250,0.45)",
-    systemPrompt:
-      "You are a real-time social assistant. The user is wearing smart glasses and seeing another person. Analyse the described scene and give whispered, short, actionable coaching — what to say, how to respond, what the other person's emotion likely means. Be a silent expert in their ear.",
-    starters: ["I'm about to meet someone new.", "They seem upset — what do I say?", "Help me read this person."],
-  },
-  {
     id: "anger-release",
     label: "Anger Release",
     emoji: "😤",
