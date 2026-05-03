@@ -197,7 +197,7 @@ async function saveMessage(
 interface SpeechRecognitionEvent extends Event { results: SpeechRecognitionResultList; }
 interface SpeechRecognitionErrorEvent extends Event { error: string; }
 interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean; interimResults: boolean; lang: string;
+  continuous: boolean; interimResults: boolean; lang: string; maxAlternatives: number;
   start(): void; stop(): void;
   onresult: ((e: SpeechRecognitionEvent) => void) | null;
   onerror: ((e: SpeechRecognitionErrorEvent) => void) | null;
@@ -209,6 +209,14 @@ declare global {
     webkitSpeechRecognition: new () => SpeechRecognitionInstance;
   }
 }
+
+type SpeechLang = "en-GB" | "en-US" | "en-IN" | "en-AU";
+const SPEECH_LANGS: { value: SpeechLang; flag: string; label: string }[] = [
+  { value: "en-GB", flag: "🇬🇧", label: "English (UK)" },
+  { value: "en-US", flag: "🇺🇸", label: "English (US)" },
+  { value: "en-IN", flag: "🇮🇳", label: "English (India)" },
+  { value: "en-AU", flag: "🇦🇺", label: "English (Australia)" },
+];
 
 const SoundWave = ({ color }: { color: string }) => (
   <div className="flex items-center gap-[3px] h-5">
@@ -261,8 +269,10 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [interimText, setInterimText] = useState("");
+  const [interimIsFinal, setInterimIsFinal] = useState(false);
   const [micFailed, setMicFailed] = useState(false);
-  const [speechLang, setSpeechLang] = useState<"en-US" | "en-GB" | "en-IN">("en-US");
+  const [lowConfidence, setLowConfidence] = useState(false);
+  const [speechLang, setSpeechLang] = useState<SpeechLang>("en-GB");
   const [emotionFlashKey, setEmotionFlashKey] = useState(0);
   const [currentCoherence, setCurrentCoherence] = useState<Coherence | null>(null);
   const prevEmotionRef = useRef<Emotion>(null);
@@ -273,6 +283,9 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const interimRef = useRef("");
+  const confidenceRef = useRef(0);
+  // Always-fresh ref to avoid stale closures in recognition callbacks
+  const startRecordingFnRef = useRef<(lang: SpeechLang) => void>(() => {});
 
   const [customPrompts, setCustomPrompts] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem("empathiq_prompts") ?? "{}") as Record<string, string>; } catch { return {}; }
@@ -400,41 +413,104 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const startRecording = useCallback((lang: string) => {
+  const startRecording = useCallback((lang: SpeechLang) => {
     if (!speechSupported || isRecording) return;
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SR = window.webkitSpeechRecognition ?? window.SpeechRecognition;
     const rec = new SR();
-    // continuous:true keeps listening through natural pauses — better accuracy for longer sentences
-    rec.continuous = true; rec.interimResults = true; rec.lang = lang;
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = lang;
+    rec.maxAlternatives = 3;
+
     interimRef.current = "";
+    confidenceRef.current = 0;
     setInterimText("");
+    setInterimIsFinal(false);
     setMicFailed(false);
+    setLowConfidence(false);
+
     rec.onresult = (e: SpeechRecognitionEvent) => {
-      let interim = ""; let final = "";
+      let interim = "";
+      let finalText = "";
+      let bestConfidence = 0;
+
       for (let i = 0; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) { final += t + " "; } else { interim += t; }
+        const result = e.results[i];
+        if (result.isFinal) {
+          // Pick the highest-confidence alternative
+          let best = result[0];
+          for (let j = 1; j < result.length; j++) {
+            if ((result[j] as SpeechRecognitionAlternative).confidence > best.confidence) {
+              best = result[j];
+            }
+          }
+          finalText += best.transcript + " ";
+          if (best.confidence > bestConfidence) bestConfidence = best.confidence;
+        } else {
+          interim += result[0].transcript;
+        }
       }
-      const combined = (final + interim).trim();
-      interimRef.current = combined;
-      setInterimText(combined);
+
+      if (finalText) {
+        const text = finalText.trim();
+        interimRef.current = text;
+        confidenceRef.current = bestConfidence;
+        setInterimText(text);
+        setInterimIsFinal(true);
+      } else {
+        interimRef.current = interim;
+        setInterimText(interim);
+        setInterimIsFinal(false);
+      }
     };
-    rec.onerror = () => { setIsRecording(false); setInterimText(""); recognitionRef.current = null; setMicFailed(true); };
-    rec.onend = () => {
+
+    rec.onerror = (e: SpeechRecognitionErrorEvent) => {
       setIsRecording(false);
       setInterimText("");
+      setInterimIsFinal(false);
       recognitionRef.current = null;
-      const text = interimRef.current.trim();
-      if (text) {
-        // Put transcribed text in the input box — user reviews and presses Send
-        setInput(text);
-        setTimeout(() => inputRef.current?.focus(), 50);
+      if (e.error === "no-speech") {
+        setMicFailed(true); // shows "Tap mic and try speaking clearly"
       } else {
         setMicFailed(true);
       }
     };
-    recognitionRef.current = rec; setIsRecording(true); rec.start();
+
+    rec.onend = () => {
+      setIsRecording(false);
+      setInterimText("");
+      setInterimIsFinal(false);
+      recognitionRef.current = null;
+      const text = interimRef.current.trim();
+      const confidence = confidenceRef.current;
+
+      if (!text) {
+        setMicFailed(true);
+        return;
+      }
+
+      // Confidence < 0.7 and we actually got a score → low quality, retry once
+      if (confidence > 0 && confidence < 0.7) {
+        setLowConfidence(true);
+        setTimeout(() => {
+          setLowConfidence(false);
+          startRecordingFnRef.current(lang); // use ref so we always get fresh fn
+        }, 1300);
+        return;
+      }
+
+      // High confidence (or browser didn't provide a score) — put in input for review
+      setInput(text);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    };
+
+    recognitionRef.current = rec;
+    setIsRecording(true);
+    rec.start();
   }, [speechSupported, isRecording]);
+
+  // Keep ref always pointing to the latest startRecording to avoid stale closures
+  startRecordingFnRef.current = startRecording;
 
   const stopRecording = useCallback(() => {
     if (!recognitionRef.current) return;
@@ -686,17 +762,44 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
           </div>
         )}
 
-        {/* Live interim transcript */}
+        {/* Low-confidence retry message */}
+        {lowConfidence && (
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center gap-2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span className="text-[11px] text-amber-400">Didn't catch that clearly — listening again…</span>
+          </div>
+        )}
+
+        {/* Mic error / no-speech message */}
+        {micFailed && !isRecording && !lowConfidence && (
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-white/4 border border-white/8 flex items-center gap-2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span className="text-[11px] text-muted-foreground">Tap mic and try speaking clearly</span>
+          </div>
+        )}
+
+        {/* Live interim transcript — grey italic while speaking, white once confirmed */}
         {isRecording && interimText && (
           <div className="mb-2 px-3 py-1.5 rounded-lg bg-white/3 border border-white/6">
-            <p className="text-xs text-muted-foreground/70 italic leading-relaxed">{interimText}</p>
+            {interimIsFinal ? (
+              <p className="text-xs text-foreground leading-relaxed">{interimText}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground/70 italic leading-relaxed">{interimText}</p>
+            )}
           </div>
         )}
 
         {isRecording && (
           <div className="flex items-center gap-2 mb-2 px-2">
             <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-            <span className="text-[11px] text-red-300">Listening… tap mic to send</span>
+            <span className="text-[11px] text-red-300">
+              {interimIsFinal ? "Confirmed — tap mic to finish" : "Listening… speak clearly"}
+            </span>
             <SoundWave color={activeMode.color} />
           </div>
         )}
@@ -715,24 +818,24 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
           />
           {speechSupported && (
             <div className="flex items-end gap-1">
-              {/* Accent selector */}
+              {/* Language selector — 4 locales, defaults to en-GB */}
               <select
                 value={speechLang}
-                onChange={(e) => setSpeechLang(e.target.value as "en-US" | "en-GB" | "en-IN")}
-                disabled={isRecording}
+                onChange={(e) => setSpeechLang(e.target.value as SpeechLang)}
+                disabled={isRecording || lowConfidence}
                 className="h-11 rounded-xl bg-white/5 border border-white/10 text-muted-foreground text-[10px] px-1.5 focus:outline-none cursor-pointer hover:bg-white/8 transition-colors disabled:opacity-40"
-                title="Speech accent"
+                title={SPEECH_LANGS.find(l => l.value === speechLang)?.label ?? "Speech language"}
               >
-                <option value="en-US">🇺🇸</option>
-                <option value="en-GB">🇬🇧</option>
-                <option value="en-IN">🇮🇳</option>
+                {SPEECH_LANGS.map(l => (
+                  <option key={l.value} value={l.value}>{l.flag}</option>
+                ))}
               </select>
-              {/* Retry button shown when last attempt was empty */}
-              {micFailed && !isRecording && (
+              {/* Retry button shown when mic failed */}
+              {micFailed && !isRecording && !lowConfidence && (
                 <button
                   onClick={() => { setMicFailed(false); startRecording(speechLang); }}
                   disabled={isTyping}
-                  title="Retry microphone"
+                  title="Try again"
                   className="flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 cursor-pointer"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
