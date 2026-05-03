@@ -51,16 +51,22 @@ const EMOTION_VALENCE: Record<string, number> = {
   fearful: 0.22, anxious: 0.2, sad: 0.18, disgusted: 0.14, angry: 0.1, pain: 0.08,
 };
 
+// PostgreSQL returns timestamps without timezone — treat them as UTC
+function parseUTC(ts: string): Date {
+  if (/[Zz]$/.test(ts) || /[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts);
+  return new Date(ts.replace(" ", "T") + "Z");
+}
+
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return parseUTC(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  return parseUTC(iso).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 }
 
 function formatDuration(start: string, end: string | null): string {
-  const ms = (end ? new Date(end) : new Date()).getTime() - new Date(start).getTime();
+  const ms = (end ? parseUTC(end) : new Date()).getTime() - parseUTC(start).getTime();
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);

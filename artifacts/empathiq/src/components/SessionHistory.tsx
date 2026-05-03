@@ -25,8 +25,16 @@ const EMOTION_LABELS: Record<string, string> = {
   surprised: "Surprised", neutral: "Neutral",
 };
 
+// PostgreSQL returns timestamps without timezone — treat them as UTC
+function parseUTC(ts: string): Date {
+  // Already has timezone info (Z or +HH:MM) → parse as-is
+  if (/[Zz]$/.test(ts) || /[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts);
+  // Replace space separator with T and append Z so JS parses as UTC
+  return new Date(ts.replace(" ", "T") + "Z");
+}
+
 function formatDuration(start: string, end: string | null): string {
-  const ms = (end ? new Date(end) : new Date()).getTime() - new Date(start).getTime();
+  const ms = (end ? parseUTC(end) : new Date()).getTime() - parseUTC(start).getTime();
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
@@ -36,7 +44,7 @@ function formatDuration(start: string, end: string | null): string {
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso);
+  const d = parseUTC(iso);
   const now = new Date();
   const diff = now.getTime() - d.getTime();
   const mins = Math.floor(diff / 60000);
