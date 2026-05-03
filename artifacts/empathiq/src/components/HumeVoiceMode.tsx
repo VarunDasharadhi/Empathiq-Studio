@@ -34,7 +34,7 @@ interface Mode {
 }
 
 const MODES: Mode[] = [
-  { id: "therapist", label: "Therapist", emoji: "🧠", color: "#818cf8",
+  { id: "therapist", label: "Companion", emoji: "🫂", color: "#818cf8",
     systemPrompt: "You are EmpathIQ acting as a compassionate therapist. Use CBT techniques, validate feelings first, ask one open question at a time. Be warm and non-judgmental. Keep responses concise." },
   { id: "dating", label: "Dating Coach", emoji: "💘", color: "#f472b6",
     systemPrompt: "You are EmpathIQ acting as a confident, playful dating coach. Be honest, fun, and help the user build genuine confidence. Keep it real, not cheesy." },

@@ -29,8 +29,8 @@ interface Mode {
 const MODES: Mode[] = [
   {
     id: "therapist",
-    label: "Therapist",
-    emoji: "🧠",
+    label: "Companion",
+    emoji: "🫂",
     color: "#818cf8",
     glow: "rgba(129,140,248,0.45)",
     systemPrompt:
