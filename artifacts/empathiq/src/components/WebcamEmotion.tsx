@@ -159,6 +159,22 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
   useEffect(() => { voiceEmotionRef.current = voiceEmotion; }, [voiceEmotion]);
   useEffect(() => { voiceScoresRef.current = voiceEmotionScores; }, [voiceEmotionScores]);
 
+  // Per-tab isolation: when glassesMode changes (tab switch), reset camera + privacy
+  useEffect(() => {
+    setPrivacyMode(false);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (detectionRef.current) { clearInterval(detectionRef.current); detectionRef.current = null; }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    glassesActiveRef.current = false;
+    setGlassesViewActive(false);
+    setCoachingText(null);
+    if (modelsLoaded) setStatus("off");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [glassesMode]);
+
   const fetchAiReading = useCallback(async () => {
     const face = emotionRef.current;
     const voice = voiceEmotionRef.current;
@@ -312,7 +328,7 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
   useEffect(() => {
     if (glassesViewActive) {
       fetchCoaching();
-      coachingIntervalRef.current = setInterval(fetchCoaching, 6000);
+      coachingIntervalRef.current = setInterval(fetchCoaching, 3000);
     } else {
       if (coachingIntervalRef.current) { clearInterval(coachingIntervalRef.current); coachingIntervalRef.current = null; }
     }
@@ -381,7 +397,7 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
           window.faceapi.nets.faceExpressionNet.loadFromUri(MODELS_CDN),
         ]);
         setModelsLoaded(true);
-        await startCamera();
+        setStatus("off");
       } catch { setStatus("error"); }
     };
     init();
@@ -544,13 +560,19 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
                     <line x1="2" y1="2" x2="22" y2="22" />
                   </svg>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium text-foreground">Camera is off</p>
-                  <p className="text-xs text-muted-foreground mt-1">Click "On" to resume emotion detection</p>
+                <div className="text-center px-6">
+                  <p className="text-sm font-medium text-foreground">
+                    {glassesMode ? "Point camera at someone to begin" : "Camera is off"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {glassesMode
+                      ? "Turn camera on, then switch to Glasses View to read their emotions"
+                      : "Click \"On\" to start emotion detection"}
+                  </p>
                 </div>
                 <button
                   onClick={toggleCamera}
-                  className="mt-1 px-4 py-2 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+                  className="mt-1 px-4 py-2 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors cursor-pointer"
                 >
                   Turn camera on
                 </button>

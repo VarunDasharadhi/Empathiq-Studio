@@ -97,6 +97,8 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   const [topVoiceEmotion, setTopVoiceEmotion] = useState<string | null>(null);
   const [topVoiceScores, setTopVoiceScores] = useState<Record<string, number>>({});
   const [connectError, setConnectError] = useState<string | null>(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const reconnectAttemptRef = useRef(0);
   const processedCount = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const assistantTurnIdRef = useRef<string | null>(null);
@@ -179,7 +181,7 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [transcript]);
 
-  // Reset voice emotion when session ends
+  // Reset voice emotion when session ends; auto-reconnect once on unexpected drop
   useEffect(() => {
     if (readyState === VoiceReadyState.CLOSED || readyState === VoiceReadyState.IDLE) {
       onVoiceEmotion(null, null);
@@ -187,7 +189,22 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
       setTopVoiceScores({});
       assistantTurnIdRef.current = null;
     }
-  }, [readyState, onVoiceEmotion]);
+    if (readyState === VoiceReadyState.CLOSED && reconnectAttemptRef.current === 0) {
+      reconnectAttemptRef.current = 1;
+      setIsReconnecting(true);
+      setConnectError(null);
+      const timer = setTimeout(() => {
+        setIsReconnecting(false);
+        void connect({
+          auth: { type: "apiKey", value: apiKey },
+          ...(configId ? { configId } : {}),
+        });
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyState]);
 
   // Send custom system prompt via session settings when session becomes live
   useEffect(() => {
@@ -199,6 +216,7 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   }, [readyState]);
 
   const handleStartSession = useCallback(() => {
+    reconnectAttemptRef.current = 0;
     setConnectError(null);
     setTranscript([]);
     processedCount.current = 0;
@@ -210,9 +228,11 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   }, [connect, apiKey, configId]);
 
   const handleEndSession = useCallback(() => {
+    reconnectAttemptRef.current = 2; // prevent auto-reconnect on deliberate end
     void disconnect();
     setTopVoiceEmotion(null);
     setTopVoiceScores({});
+    setIsReconnecting(false);
     onVoiceEmotion(null, null);
     assistantTurnIdRef.current = null;
   }, [disconnect, onVoiceEmotion]);
@@ -473,8 +493,16 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
         )}
 
         <p className="text-xs text-muted-foreground">
-          {isConnecting ? "Connecting to EVI…" : isOpen ? "Tap to end session" : "Tap mic to start"}
+          {isReconnecting ? "Reconnecting…" : isConnecting ? "Connecting to EVI…" : isOpen ? "Tap to end session" : "Tap mic to start"}
         </p>
+
+        <div className="flex items-center gap-1 mt-1 opacity-40">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" className="text-muted-foreground">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+          </svg>
+          <span className="text-[9px] text-muted-foreground tracking-wide">Powered by Hume EVI</span>
+        </div>
       </div>
 
       {/* ── Prompt editor modal ── */}

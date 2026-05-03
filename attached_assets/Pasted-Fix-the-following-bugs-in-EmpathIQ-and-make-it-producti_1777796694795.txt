@@ -1,0 +1,63 @@
+Fix the following bugs in EmpathIQ and make it production/buildathon ready:
+
+1. CAMERA DEFAULT STATE
+- Camera should be OFF by default when the app first loads
+- User must manually click "Turn camera on" to start
+- Each tab (Chat, Voice, Smart Glasses) should manage its own 
+  independent camera state
+- Switching tabs should NOT carry over the previous tab's camera state
+
+2. PRIVACY MODE ISOLATION
+- Privacy mode (blur) should only apply to the current tab it was 
+  enabled in
+- When switching to Smart Glasses mode, camera should always start 
+  fresh — no blur, no privacy mode carried over
+- Smart Glasses mode should have its own independent camera controls
+- Add a clear "Privacy" toggle button inside Smart Glasses mode too
+  so it's consistent across all tabs
+
+3. SPEECH TO TEXT ACCURACY
+- Replace or improve current speech recognition
+- Use Web Speech API with these settings:
+  continuous: false
+  interimResults: true
+  lang: 'en-US'
+- Show interim (live) transcript in a subtle grey text below the 
+  input as user speaks — so they can see it being transcribed in real time
+- Only send final confirmed transcript to Claude/EVI
+- Add a "retry" mic button if recognition fails or returns empty
+- Handle accents better by setting lang dynamically — add a small 
+  language/accent selector (English UK, English US, English IN)
+
+4. EVI VOICE CUTOFF FIX
+- Increase turn end silence timeout to 3000ms so EVI waits longer 
+  before cutting off long sentences
+- If EVI SDK supports it, set vad_sensitivity to low so it doesn't 
+  trigger end-of-turn on natural pauses mid-sentence
+
+5. PRODUCTION POLISH
+- Remove all console.log statements
+- Add proper error boundaries — if camera fails, show friendly message
+- If Claude API fails, show "Reconnecting..." instead of blank screen
+- If Hume EVI disconnects, auto-reconnect once before showing error
+- Add a loading spinner on initial app load
+- Make sure all buttons have hover states and cursor: pointer
+- Test and fix any layout breaks on smaller screens (min 768px width)
+- Make sure "Powered by Claude" and "Powered by Hume EVI" credits 
+  are visible in their respective modes
+
+6. SMART GLASSES MODE SPECIFIC
+- On entering Smart Glasses mode, always start with camera OFF
+- Show clear instruction: "Point camera at someone to begin"
+- Camera flip (front/back) button should work independently of 
+  other modes
+- Detected emotion and coaching suggestion should update every 
+  3 seconds — not too fast, not too slow
+
+7. FINAL CHECKS
+- Verify Anthropic API key and Hume API key are being read correctly 
+  from environment variables
+- Make sure the app works without Hume key (graceful fallback to 
+  Web Speech API if Hume is unavailable)
+- Check all 9 modes load correctly with their unique system prompts
+- Confirm session history saves correctly and loads on History tab

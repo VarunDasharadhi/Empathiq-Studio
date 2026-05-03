@@ -44,6 +44,7 @@ const NAV_TABS: Array<{ id: RightPanel; emoji: string; label: string; color: str
 ];
 
 function App() {
+  const [appReady, setAppReady] = useState(false);
   const [faceEmotion, setFaceEmotion] = useState<Emotion>(null);
   const [voiceEmotion, setVoiceEmotion] = useState<string | null>(null);
   const [voiceEmotionScores, setVoiceEmotionScores] = useState<Record<string, number> | null>(null);
@@ -106,6 +107,11 @@ function App() {
     } catch { /* non-critical */ }
   }, [rightPanel]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setAppReady(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => { createSession(); }, [createSession]);
 
   const handleNewSession = useCallback(async () => {
@@ -144,7 +150,19 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex flex-col h-full w-full overflow-hidden app-gradient-bg">
+      {!appReady && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#07080d] gap-4">
+          <div className="relative w-14 h-14">
+            <div className="absolute inset-0 rounded-full border-2 border-primary/20" />
+            <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-primary animate-spin" />
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <p className="text-sm font-semibold text-foreground">EmpathIQ</p>
+            <p className="text-xs text-muted-foreground">Loading emotional AI…</p>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-col h-full w-full overflow-hidden app-gradient-bg" style={{ minWidth: 768 }}>
 
         {/* ── Nav bar ── */}
         <div className="flex-none bg-black/30 backdrop-blur-md z-10 border-b border-white/8">

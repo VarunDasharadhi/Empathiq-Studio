@@ -260,6 +260,9 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [interimText, setInterimText] = useState("");
+  const [micFailed, setMicFailed] = useState(false);
+  const [speechLang, setSpeechLang] = useState<"en-US" | "en-GB" | "en-IN">("en-US");
   const [emotionFlashKey, setEmotionFlashKey] = useState(0);
   const [currentCoherence, setCurrentCoherence] = useState<Coherence | null>(null);
   const prevEmotionRef = useRef<Emotion>(null);
@@ -397,30 +400,48 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback((lang: string) => {
     if (!speechSupported || isRecording) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
-    rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
+    rec.continuous = false; rec.interimResults = true; rec.lang = lang;
     interimRef.current = "";
+    setInterimText("");
+    setMicFailed(false);
     rec.onresult = (e: SpeechRecognitionEvent) => {
-      let t = ""; for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-      interimRef.current = t; setInput(t);
+      let interim = ""; let final = "";
+      for (let i = 0; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) { final += t; } else { interim += t; }
+      }
+      interimRef.current = final || interim;
+      setInterimText(final || interim);
+      if (final) { setInput(final); }
     };
-    rec.onerror = () => { setIsRecording(false); recognitionRef.current = null; };
-    rec.onend = () => { setIsRecording(false); recognitionRef.current = null; };
+    rec.onerror = () => { setIsRecording(false); setInterimText(""); recognitionRef.current = null; setMicFailed(true); };
+    rec.onend = () => {
+      setIsRecording(false);
+      setInterimText("");
+      recognitionRef.current = null;
+      const text = interimRef.current.trim();
+      if (text) {
+        setInput(text);
+        setTimeout(() => sendMessage(text), 80);
+      } else {
+        setMicFailed(true);
+      }
+    };
     recognitionRef.current = rec; setIsRecording(true); rec.start();
-  }, [speechSupported, isRecording]);
+  }, [speechSupported, isRecording, sendMessage]);
 
   const stopRecording = useCallback(() => {
     if (!recognitionRef.current) return;
-    recognitionRef.current.stop(); recognitionRef.current = null; setIsRecording(false);
-    const text = interimRef.current.trim();
-    if (text) setTimeout(() => sendMessage(text), 80);
-  }, [sendMessage]);
+    recognitionRef.current.stop();
+  }, []);
 
-  const handleMicPointerDown = useCallback((e: React.PointerEvent) => { e.preventDefault(); startRecording(); }, [startRecording]);
-  const handleMicPointerUp = useCallback((e: React.PointerEvent) => { e.preventDefault(); stopRecording(); }, [stopRecording]);
+  const toggleRecording = useCallback(() => {
+    if (isRecording) { stopRecording(); } else { startRecording(speechLang); }
+  }, [isRecording, stopRecording, startRecording, speechLang]);
 
   const emotionColor = currentEmotion ? EMOTION_COLORS[currentEmotion] : null;
   const emotionLabel = currentEmotion ? EMOTION_LABELS[currentEmotion] : null;
@@ -663,10 +684,17 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
           </div>
         )}
 
+        {/* Live interim transcript */}
+        {isRecording && interimText && (
+          <div className="mb-2 px-3 py-1.5 rounded-lg bg-white/3 border border-white/6">
+            <p className="text-xs text-muted-foreground/70 italic leading-relaxed">{interimText}</p>
+          </div>
+        )}
+
         {isRecording && (
           <div className="flex items-center gap-2 mb-2 px-2">
             <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-            <span className="text-[11px] text-red-300">Recording… release to send</span>
+            <span className="text-[11px] text-red-300">Listening… tap mic to send</span>
             <SoundWave color={activeMode.color} />
           </div>
         )}
@@ -684,27 +712,53 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
             disabled={isTyping || isRecording}
           />
           {speechSupported && (
-            <button
-              onPointerDown={handleMicPointerDown}
-              onPointerUp={handleMicPointerUp}
-              onPointerLeave={handleMicPointerUp}
-              disabled={isTyping}
-              title="Hold to speak"
-              className={`flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all select-none touch-none ${
-                isRecording
-                  ? "bg-red-500 text-white scale-105"
-                  : "bg-white/5 border border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/8 disabled:opacity-30"
-              }`}
-              style={isRecording ? { boxShadow: "0 0 16px rgba(239,68,68,0.5)" } : {}}
-            >
-              {isRecording ? <SoundWave color="white" /> : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
-                </svg>
+            <div className="flex items-end gap-1">
+              {/* Accent selector */}
+              <select
+                value={speechLang}
+                onChange={(e) => setSpeechLang(e.target.value as "en-US" | "en-GB" | "en-IN")}
+                disabled={isRecording}
+                className="h-11 rounded-xl bg-white/5 border border-white/10 text-muted-foreground text-[10px] px-1.5 focus:outline-none cursor-pointer hover:bg-white/8 transition-colors disabled:opacity-40"
+                title="Speech accent"
+              >
+                <option value="en-US">🇺🇸</option>
+                <option value="en-GB">🇬🇧</option>
+                <option value="en-IN">🇮🇳</option>
+              </select>
+              {/* Retry button shown when last attempt was empty */}
+              {micFailed && !isRecording && (
+                <button
+                  onClick={() => { setMicFailed(false); startRecording(speechLang); }}
+                  disabled={isTyping}
+                  title="Retry microphone"
+                  className="flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 cursor-pointer"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.96" />
+                  </svg>
+                </button>
               )}
-            </button>
+              {/* Mic toggle button */}
+              <button
+                onClick={toggleRecording}
+                disabled={isTyping}
+                title={isRecording ? "Tap to send" : "Tap to speak"}
+                className={`flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all select-none cursor-pointer ${
+                  isRecording
+                    ? "bg-red-500 text-white scale-105"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/8 disabled:opacity-30"
+                }`}
+                style={isRecording ? { boxShadow: "0 0 16px rgba(239,68,68,0.5)" } : {}}
+              >
+                {isRecording ? <SoundWave color="white" /> : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                )}
+              </button>
+            </div>
           )}
           <button
             onClick={() => sendMessage()}
