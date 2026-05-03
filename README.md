@@ -3,7 +3,7 @@
 > Real-time emotional intelligence AI that reads your face + voice 
 > and responds like someone who truly understands you.
 
-![EmpathIQ](./screenshots/ideogram.jpeg)
+![EmpathIQ](./screenshots/empathiq.jpeg)
 
 ## 🔗 Live Demo
 👉 https://empathiq-studio--varundasharadhi.replit.app
