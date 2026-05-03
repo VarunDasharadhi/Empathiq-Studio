@@ -61,7 +61,6 @@ interface Props {
   voiceEmotion?: string | null;
   voiceEmotionScores?: Record<string, number> | null;
   glassesMode?: boolean;
-  activateGlasses?: boolean;
   onCoachingText?: (text: string) => void;
 }
 type Status = "loading-models" | "requesting-camera" | "ready" | "off" | "no-camera" | "error";
@@ -119,7 +118,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   );
 };
 
-export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null, glassesMode = false, activateGlasses = false, onCoachingText }: Props) {
+export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null, glassesMode = false, onCoachingText }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>("loading-models");
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion>(null);
@@ -355,23 +354,13 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
   // Keep ref in sync so auto-activation effects don't capture stale closure
   useEffect(() => { toggleGlassesViewRef.current = toggleGlassesView; }, [toggleGlassesView]);
 
-  // Auto-activate glasses view when the Smart Glasses tab becomes active
+  // When camera becomes ready while in Smart Glasses mode, auto-switch to Glasses View
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (activateGlasses && !glassesActiveRef.current && status === "ready") {
-      void toggleGlassesViewRef.current();
-    } else if (!activateGlasses && glassesActiveRef.current) {
+    if (glassesMode && status === "ready" && !glassesActiveRef.current) {
       void toggleGlassesViewRef.current();
     }
-  }, [activateGlasses]); // intentionally omit status — handled by the effect below
-
-  // Also trigger when camera becomes ready while activateGlasses is already true
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (activateGlasses && status === "ready" && !glassesActiveRef.current) {
-      void toggleGlassesViewRef.current();
-    }
-  }, [status]); // intentionally omit activateGlasses — handled by effect above
+  }, [status]); // glassesMode intentionally omitted — only fire on status change
 
   const cycleCamera = useCallback(async () => {
     if (availableCameras.length < 2) return;

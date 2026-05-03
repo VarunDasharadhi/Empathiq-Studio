@@ -231,7 +231,6 @@ function App() {
               voiceEmotion={voiceEmotion}
               voiceEmotionScores={voiceEmotionScores}
               glassesMode={rightPanel === "glasses"}
-              activateGlasses={rightPanel === "glasses"}
               onCoachingText={handleCoachingText}
             />
           </div>
