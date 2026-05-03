@@ -404,7 +404,8 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
     if (!speechSupported || isRecording) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
-    rec.continuous = false; rec.interimResults = true; rec.lang = lang;
+    // continuous:true keeps listening through natural pauses — better accuracy for longer sentences
+    rec.continuous = true; rec.interimResults = true; rec.lang = lang;
     interimRef.current = "";
     setInterimText("");
     setMicFailed(false);
@@ -412,11 +413,11 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       let interim = ""; let final = "";
       for (let i = 0; i < e.results.length; i++) {
         const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) { final += t; } else { interim += t; }
+        if (e.results[i].isFinal) { final += t + " "; } else { interim += t; }
       }
-      interimRef.current = final || interim;
-      setInterimText(final || interim);
-      if (final) { setInput(final); }
+      const combined = (final + interim).trim();
+      interimRef.current = combined;
+      setInterimText(combined);
     };
     rec.onerror = () => { setIsRecording(false); setInterimText(""); recognitionRef.current = null; setMicFailed(true); };
     rec.onend = () => {
@@ -425,14 +426,15 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       recognitionRef.current = null;
       const text = interimRef.current.trim();
       if (text) {
+        // Put transcribed text in the input box — user reviews and presses Send
         setInput(text);
-        setTimeout(() => sendMessage(text), 80);
+        setTimeout(() => inputRef.current?.focus(), 50);
       } else {
         setMicFailed(true);
       }
     };
     recognitionRef.current = rec; setIsRecording(true); rec.start();
-  }, [speechSupported, isRecording, sendMessage]);
+  }, [speechSupported, isRecording]);
 
   const stopRecording = useCallback(() => {
     if (!recognitionRef.current) return;

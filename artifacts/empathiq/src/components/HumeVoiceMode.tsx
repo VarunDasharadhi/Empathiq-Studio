@@ -22,6 +22,7 @@ interface EviInnerProps {
   faceEmotionCounts: Record<string, number>;
   voiceGender: "masculine" | "feminine";
   onVoiceGenderChange: (g: "masculine" | "feminine") => void;
+  externalError: string | null;
 }
 
 interface Mode {
@@ -90,7 +91,7 @@ function SoundWave({ color }: { color: string }) {
 interface TxMsg { id: string; role: "user" | "assistant"; text: string; emotion: string | null; }
 
 // ── Inner component (inside VoiceProvider context) ───────────────────────────
-function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts, voiceGender, onVoiceGenderChange }: EviInnerProps) {
+function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts, voiceGender, onVoiceGenderChange, externalError }: EviInnerProps) {
   const { connect, disconnect, readyState, messages, isMuted, mute, unmute, sendSessionSettings } = useVoice();
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [transcript, setTranscript] = useState<TxMsg[]>([]);
@@ -195,9 +196,12 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
       setConnectError(null);
       const timer = setTimeout(() => {
         setIsReconnecting(false);
-        void connect({
+        connect({
           auth: { type: "apiKey", value: apiKey },
           ...(configId ? { configId } : {}),
+        }).catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          setConnectError(`Reconnect failed: ${msg}`);
         });
       }, 1500);
       return () => clearTimeout(timer);
@@ -221,9 +225,12 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
     setTranscript([]);
     processedCount.current = 0;
     assistantTurnIdRef.current = null;
-    void connect({
+    connect({
       auth: { type: "apiKey", value: apiKey },
       ...(configId ? { configId } : {}),
+    }).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      setConnectError(`Could not start session: ${msg}`);
     });
   }, [connect, apiKey, configId]);
 
@@ -433,9 +440,9 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
       </div>
 
       {/* ── Error ── */}
-      {connectError && (
+      {(connectError ?? externalError) && (
         <div className="flex-none mx-4 mb-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
-          {connectError}
+          {connectError ?? externalError}
         </div>
       )}
 
@@ -590,6 +597,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
   const [config, setConfig] = useState<HumeConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [eviError, setEviError] = useState<string | null>(null);
 
   // Re-fetch config whenever voice gender changes
   useEffect(() => {
@@ -653,7 +661,14 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
   }
 
   return (
-    <VoiceProvider clearMessagesOnDisconnect onMessage={handleRawMessage}>
+    <VoiceProvider
+      clearMessagesOnDisconnect
+      onMessage={handleRawMessage}
+      onError={(err: { message?: string }) => {
+        const msg = err.message ?? "Microphone or connection error. Check mic permissions.";
+        setEviError(msg);
+      }}
+    >
       <EviInner
         apiKey={config.apiKey}
         configId={config.configId}
@@ -662,6 +677,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
         faceEmotionCounts={faceEmotionCounts}
         voiceGender={voiceGender}
         onVoiceGenderChange={setVoiceGender}
+        externalError={eviError}
       />
     </VoiceProvider>
   );
