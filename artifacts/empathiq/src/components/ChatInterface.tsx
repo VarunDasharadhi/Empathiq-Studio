@@ -287,6 +287,14 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   // Always-fresh ref to avoid stale closures in recognition callbacks
   const startRecordingFnRef = useRef<(lang: SpeechLang) => void>(() => {});
 
+  // Mode bar scroll
+  const modeBarRef = useRef<HTMLDivElement>(null);
+  const modePillRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const dragState = useRef({ active: false, startX: 0, scrollLeft: 0, moved: 0 });
+  const touchDrag = useRef({ startX: 0, scrollLeft: 0 });
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
   const [customPrompts, setCustomPrompts] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem("empathiq_prompts") ?? "{}") as Record<string, string>; } catch { return {}; }
   });
@@ -521,6 +529,66 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
     if (isRecording) { stopRecording(); } else { startRecording(speechLang); }
   }, [isRecording, stopRecording, startRecording, speechLang]);
 
+  // Keep scroll indicators in sync
+  const updateScrollState = useCallback(() => {
+    const el = modeBarRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 2);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    const el = modeBarRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    const ro = new ResizeObserver(updateScrollState);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", updateScrollState); ro.disconnect(); };
+  }, [updateScrollState]);
+
+  // Auto-scroll active pill into view when mode changes
+  useEffect(() => {
+    const pill = modePillRefs.current[activeMode.id];
+    pill?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [activeMode.id]);
+
+  const scrollModeBar = (dir: "left" | "right") => {
+    modeBarRef.current?.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" });
+  };
+
+  const onModeBarMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = modeBarRef.current;
+    if (!el) return;
+    dragState.current = { active: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, moved: 0 };
+    el.style.cursor = "grabbing";
+  };
+  const onModeBarMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragState.current.active) return;
+    const el = modeBarRef.current;
+    if (!el) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    const walk = x - dragState.current.startX;
+    dragState.current.moved = Math.abs(walk);
+    el.scrollLeft = dragState.current.scrollLeft - walk;
+  };
+  const onModeBarMouseUp = () => {
+    dragState.current.active = false;
+    if (modeBarRef.current) modeBarRef.current.style.cursor = "grab";
+  };
+  const onModeBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const el = modeBarRef.current;
+    if (!el) return;
+    touchDrag.current = { startX: e.touches[0].pageX, scrollLeft: el.scrollLeft };
+  };
+  const onModeBarTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const el = modeBarRef.current;
+    if (!el) return;
+    const dx = touchDrag.current.startX - e.touches[0].pageX;
+    el.scrollLeft = touchDrag.current.scrollLeft + dx;
+  };
+
   const emotionColor = currentEmotion ? EMOTION_COLORS[currentEmotion] : null;
   const emotionLabel = currentEmotion ? EMOTION_LABELS[currentEmotion] : null;
 
@@ -588,46 +656,98 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
         </div>
       )}
 
-      {/* Mode selector */}
-      <div className="flex-none px-4 pt-3 pb-2 flex gap-2 overflow-x-auto scrollbar-none">
-        {MODES.map((mode) => {
-          const isActive = mode.id === activeMode.id;
-          const hasCustom = !!customPrompts[mode.id];
-          return (
-            <button
-              key={mode.id}
-              onClick={() => handleModeChange(mode)}
-              className="flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 whitespace-nowrap group"
-              style={isActive
-                ? { backgroundColor: `${mode.color}18`, color: mode.color, boxShadow: `0 0 0 1.5px ${mode.color}, 0 0 12px ${mode.glow}`, animation: "modePulse 2.5s ease-in-out infinite" }
-                : { backgroundColor: "transparent", color: "var(--muted-foreground)", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }
-              }
-            >
-              <span>{mode.emoji}</span>
-              <span>{mode.label}</span>
-              {hasCustom && !isActive && (
-                <span className="w-1 h-1 rounded-full opacity-60" style={{ backgroundColor: mode.color }} />
-              )}
-              {isActive && (
-                <span
-                  role="button"
-                  onClick={(e) => { e.stopPropagation(); openEditor(mode); }}
-                  className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer"
-                  title="Edit system prompt"
-                >
-                  {hasCustom ? (
-                    <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: mode.color }} />
-                  ) : (
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  )}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      {/* Mode selector — scrollable with drag + arrows */}
+      <div className="flex-none relative">
+        {/* Left arrow */}
+        {canScrollLeft && (
+          <button
+            onClick={() => scrollModeBar("left")}
+            className="absolute left-0 top-0 h-full z-10 px-1.5 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+            style={{ background: "linear-gradient(to right, var(--background) 60%, transparent)" }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+        )}
+        {/* Right arrow */}
+        {canScrollRight && (
+          <button
+            onClick={() => scrollModeBar("right")}
+            className="absolute right-0 top-0 h-full z-10 px-1.5 flex items-center text-muted-foreground hover:text-foreground transition-colors"
+            style={{ background: "linear-gradient(to left, var(--background) 60%, transparent)" }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+        )}
+        {/* Edge fade hints */}
+        {canScrollLeft && (
+          <div className="absolute left-6 top-0 h-full w-8 pointer-events-none z-[5]"
+            style={{ background: "linear-gradient(to right, rgba(0,0,0,0.35), transparent)" }} />
+        )}
+        {canScrollRight && (
+          <div className="absolute right-6 top-0 h-full w-8 pointer-events-none z-[5]"
+            style={{ background: "linear-gradient(to left, rgba(0,0,0,0.35), transparent)" }} />
+        )}
+        {/* Scrollable pill strip */}
+        <div
+          ref={modeBarRef}
+          className="flex gap-2 pt-3 pb-2 select-none"
+          style={{
+            overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none",
+            cursor: "grab", scrollBehavior: "smooth",
+            paddingLeft: canScrollLeft ? "28px" : "16px",
+            paddingRight: canScrollRight ? "28px" : "16px",
+          }}
+          onMouseDown={onModeBarMouseDown}
+          onMouseMove={onModeBarMouseMove}
+          onMouseUp={onModeBarMouseUp}
+          onMouseLeave={onModeBarMouseUp}
+          onTouchStart={onModeBarTouchStart}
+          onTouchMove={onModeBarTouchMove}
+        >
+          {MODES.map((mode) => {
+            const isActive = mode.id === activeMode.id;
+            const hasCustom = !!customPrompts[mode.id];
+            return (
+              <button
+                key={mode.id}
+                ref={(el) => { modePillRefs.current[mode.id] = el; }}
+                onClick={() => { if (dragState.current.moved < 5) handleModeChange(mode); }}
+                className="flex-none flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 whitespace-nowrap group"
+                style={isActive
+                  ? { backgroundColor: `${mode.color}18`, color: mode.color, boxShadow: `0 0 0 1.5px ${mode.color}, 0 0 12px ${mode.glow}`, animation: "modePulse 2.5s ease-in-out infinite" }
+                  : { backgroundColor: "transparent", color: "var(--muted-foreground)", boxShadow: "0 0 0 1px rgba(255,255,255,0.08)" }
+                }
+              >
+                <span>{mode.emoji}</span>
+                <span>{mode.label}</span>
+                {hasCustom && !isActive && (
+                  <span className="w-1 h-1 rounded-full opacity-60" style={{ backgroundColor: mode.color }} />
+                )}
+                {isActive && (
+                  <span
+                    role="button"
+                    onClick={(e) => { e.stopPropagation(); openEditor(mode); }}
+                    className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity cursor-pointer"
+                    title="Edit system prompt"
+                  >
+                    {hasCustom ? (
+                      <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: mode.color }} />
+                    ) : (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    )}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Messages */}
