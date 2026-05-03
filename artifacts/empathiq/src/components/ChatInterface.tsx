@@ -345,6 +345,15 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   }, [messages, isTyping]);
 
   const sendMessage = useCallback(async (overrideText?: string) => {
+    // Stop any in-progress recording so the user is never blocked by mic state
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setIsRecording(false);
+    setInterimText("");
+    setInterimIsFinal(false);
+
     const text = (overrideText ?? input).trim();
     if (!text || isTyping) return;
 
@@ -386,11 +395,14 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
               : m.content,
       }));
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30_000);
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: apiMessages, systemPrompt: customPrompts[activeMode.id] ?? activeMode.systemPrompt }),
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
 
       if (!res.ok) throw new Error("API error");
       const data = (await res.json()) as { content: string };
@@ -977,7 +989,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
           )}
           <button
             onClick={() => sendMessage()}
-            disabled={!input.trim() || isTyping || isRecording}
+            disabled={!input.trim() || isTyping}
             className="flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-primary hover:bg-primary/80 text-primary-foreground disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
