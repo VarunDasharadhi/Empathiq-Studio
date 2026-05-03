@@ -68,3 +68,12 @@ Replit 10 Buildathon — May 2026 — Built solo in 24 hours
 
 ## 👤 Author
 Varun Dasharadhi
+
+## License
+© 2026 Varun Dasharadhi. All Rights Reserved.
+
+EmpathIQ is proprietary software. Unauthorised copying, 
+modification, or distribution is strictly prohibited.
+
+For licensing or partnership enquiries contact:
+dasharadhivarun@gmail.com
