@@ -85,6 +85,165 @@ function getEmotionBreakdown(snapshots: EmotionSnapshot[]): Array<{ emotion: str
     .sort((a, b) => b.count - a.count);
 }
 
+// ── Full scrollable Emotion Timeline ────────────────────────────────────────
+function FullEmotionTimeline({ snapshots }: { snapshots: EmotionSnapshot[] }) {
+  if (snapshots.length === 0) return null;
+
+  const W = 600;
+  const H = 110;
+  const PAD = { x: 12, y: 18 };
+  const LABEL_H = 28;
+  const chartH = H - LABEL_H;
+
+  // Sample to at most 40 points for rendering
+  const MAX = 40;
+  let sampled: EmotionSnapshot[] = snapshots;
+  if (snapshots.length > MAX) {
+    const step = snapshots.length / MAX;
+    sampled = Array.from({ length: MAX }, (_, i) => snapshots[Math.floor(i * step)]);
+  }
+
+  const points = sampled.map((snap, i) => {
+    const valence = EMOTION_VALENCE[snap.emotion] ?? 0.5;
+    const x = PAD.x + (i / Math.max(sampled.length - 1, 1)) * (W - PAD.x * 2);
+    const y = PAD.y + (1 - valence) * (chartH - PAD.y * 2);
+    const color = EMOTION_COLORS[snap.emotion] ?? "#9ca3af";
+    return { x, y, color, emotion: snap.emotion, time: snap.recordedAt };
+  });
+
+  let pathD = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const cpx = (prev.x + curr.x) / 2;
+    pathD += ` C ${cpx} ${prev.y}, ${cpx} ${curr.y}, ${curr.x} ${curr.y}`;
+  }
+
+  const areaD = `${pathD} L ${points[points.length - 1].x} ${chartH} L ${points[0].x} ${chartH} Z`;
+
+  const avgValence = points.reduce((s, p) => s + (EMOTION_VALENCE[p.emotion] ?? 0.5), 0) / points.length;
+  const gradColor = avgValence >= 0.6 ? "#4ade80" : avgValence <= 0.35 ? "#f87171" : "#facc15";
+
+  // Decide which points to show labels for (max ~10 labels, evenly spaced)
+  const labelEvery = Math.max(1, Math.floor(points.length / 10));
+  const labeledIndices = new Set(
+    points
+      .map((_, i) => i)
+      .filter((i) => i % labelEvery === 0 || i === points.length - 1)
+  );
+
+  return (
+    <div className="overflow-x-auto scrollbar-thin pb-1">
+      <div style={{ minWidth: `${W + 24}px` }}>
+        <svg
+          width={W + 24}
+          height={H + LABEL_H}
+          viewBox={`0 0 ${W + 24} ${H + LABEL_H}`}
+          className="overflow-visible"
+        >
+          <defs>
+            <linearGradient id="ftGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={gradColor} stopOpacity="0.2" />
+              <stop offset="100%" stopColor={gradColor} stopOpacity="0.02" />
+            </linearGradient>
+            <filter id="ftGlow">
+              <feGaussianBlur stdDeviation="1.5" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
+
+          {/* Horizontal valence guide lines */}
+          {[
+            { label: "Positive", frac: 0.1 },
+            { label: "Neutral", frac: 0.5 },
+            { label: "Negative", frac: 0.9 },
+          ].map(({ label, frac }) => {
+            const gy = PAD.y + frac * (chartH - PAD.y * 2);
+            const col = frac < 0.3 ? "#4ade80" : frac > 0.7 ? "#f87171" : "#facc15";
+            return (
+              <g key={label}>
+                <line
+                  x1={PAD.x}
+                  y1={gy}
+                  x2={W + 12}
+                  y2={gy}
+                  stroke={col}
+                  strokeWidth="0.5"
+                  strokeDasharray="3 4"
+                  opacity="0.18"
+                />
+                <text x={PAD.x - 2} y={gy + 3} textAnchor="end" fontSize="7" fill={col} opacity="0.45">{label}</text>
+              </g>
+            );
+          })}
+
+          {/* Area fill */}
+          <path d={areaD} fill="url(#ftGrad)" />
+
+          {/* Stroke line */}
+          <path
+            d={pathD}
+            fill="none"
+            stroke={gradColor}
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            filter="url(#ftGlow)"
+            opacity="0.8"
+          />
+
+          {/* All dots */}
+          {points.map((p, i) => (
+            <circle
+              key={i}
+              cx={p.x}
+              cy={p.y}
+              r={labeledIndices.has(i) ? 3.5 : 2}
+              fill={p.color}
+              opacity={labeledIndices.has(i) ? 0.9 : 0.5}
+            />
+          ))}
+
+          {/* Labels for selected points: emotion name + timestamp */}
+          {points.map((p, i) => {
+            if (!labeledIndices.has(i)) return null;
+            const isTop = p.y > chartH / 2;
+            const labelY = isTop ? p.y - 8 : p.y + 16;
+            const timeStr = parseUTC(p.time).toLocaleTimeString(undefined, {
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            const label = EMOTION_LABELS[p.emotion] ?? p.emotion;
+            return (
+              <g key={`lbl-${i}`}>
+                <text
+                  x={p.x}
+                  y={labelY}
+                  textAnchor="middle"
+                  fontSize="8"
+                  fontWeight="600"
+                  fill={p.color}
+                  opacity="0.9"
+                >
+                  {label}
+                </text>
+                <text
+                  x={p.x}
+                  y={labelY + 10}
+                  textAnchor="middle"
+                  fontSize="7"
+                  fill="rgba(255,255,255,0.35)"
+                >
+                  {timeStr}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 // ── Emotional Arc Graph ─────────────────────────────────────────────────────
 function EmotionArcChart({ snapshots }: { snapshots: EmotionSnapshot[] }) {
   if (snapshots.length < 2) return null;
@@ -336,6 +495,21 @@ export default function SessionReplay({ session, onBack }: Props) {
                 </div>
                 <span className="text-[10px] text-muted-foreground">{formatTime(detail.emotionTimeline[detail.emotionTimeline.length - 1].recordedAt)}</span>
               </div>
+            </div>
+          )}
+
+          {/* ── Full Emotion Timeline ── */}
+          {detail.emotionTimeline.length >= 2 && (
+            <div className="mx-4 mb-2 rounded-xl border border-white/8 bg-white/3 px-4 pt-3.5 pb-2">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Emotion Timeline
+                </p>
+                <span className="text-[9px] text-muted-foreground/50 italic">
+                  {detail.emotionTimeline.length} snapshots · scroll →
+                </span>
+              </div>
+              <FullEmotionTimeline snapshots={detail.emotionTimeline} />
             </div>
           )}
 

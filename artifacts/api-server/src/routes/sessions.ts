@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, sessionsTable, sessionMessagesTable, emotionTimelineTable } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
@@ -26,7 +26,45 @@ router.get("/sessions", async (req, res) => {
       .from(sessionsTable)
       .orderBy(desc(sessionsTable.startedAt))
       .limit(50);
-    res.json(sessions);
+
+    if (sessions.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    const sessionIds = sessions.map((s) => s.id);
+    const allEmotions = await db
+      .select({
+        sessionId: emotionTimelineTable.sessionId,
+        emotion: emotionTimelineTable.emotion,
+        confidence: emotionTimelineTable.confidence,
+      })
+      .from(emotionTimelineTable)
+      .where(inArray(emotionTimelineTable.sessionId, sessionIds))
+      .orderBy(emotionTimelineTable.recordedAt);
+
+    const emotionsBySession: Record<number, Array<{ emotion: string; confidence: number }>> = {};
+    for (const e of allEmotions) {
+      if (!emotionsBySession[e.sessionId]) emotionsBySession[e.sessionId] = [];
+      emotionsBySession[e.sessionId].push({ emotion: e.emotion, confidence: e.confidence });
+    }
+
+    const MAX_SPARKLINE = 20;
+    const result = sessions.map((s) => {
+      const full = emotionsBySession[s.id] ?? [];
+      let sampled: Array<{ emotion: string; confidence: number }> = [];
+      if (full.length > MAX_SPARKLINE) {
+        const step = full.length / MAX_SPARKLINE;
+        for (let i = 0; i < MAX_SPARKLINE; i++) {
+          sampled.push(full[Math.floor(i * step)]);
+        }
+      } else {
+        sampled = full;
+      }
+      return { ...s, emotionSeries: sampled };
+    });
+
+    res.json(result);
   } catch (err) {
     req.log.error({ err }, "List sessions error");
     res.status(500).json({ error: "Failed to list sessions" });

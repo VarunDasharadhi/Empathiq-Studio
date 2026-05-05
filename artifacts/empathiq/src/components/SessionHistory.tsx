@@ -7,6 +7,7 @@ export interface Session {
   endedAt: string | null;
   messageCount: number;
   dominantEmotion: string | null;
+  emotionSeries?: Array<{ emotion: string; confidence: number }>;
 }
 
 const EMOTION_COLORS: Record<string, string> = {
@@ -25,11 +26,15 @@ const EMOTION_LABELS: Record<string, string> = {
   surprised: "Surprised", neutral: "Neutral",
 };
 
+const EMOTION_VALENCE: Record<string, number> = {
+  happy: 0.92, joy: 0.92, excited: 0.88, amusement: 0.82, awe: 0.78, surprised: 0.7,
+  neutral: 0.5, calmness: 0.55, confusion: 0.42,
+  fearful: 0.22, anxious: 0.2, sad: 0.18, disgusted: 0.14, angry: 0.1, pain: 0.08,
+};
+
 // PostgreSQL returns timestamps without timezone — treat them as UTC
 function parseUTC(ts: string): Date {
-  // Already has timezone info (Z or +HH:MM) → parse as-is
   if (/[Zz]$/.test(ts) || /[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts);
-  // Replace space separator with T and append Z so JS parses as UTC
   return new Date(ts.replace(" ", "T") + "Z");
 }
 
@@ -55,6 +60,80 @@ function formatDate(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+// ── Mini Sparkline ───────────────────────────────────────────────────────────
+function MiniSparkline({
+  series,
+  dominantEmotion,
+  sessionId,
+}: {
+  series: Array<{ emotion: string; confidence: number }>;
+  dominantEmotion: string | null;
+  sessionId: number;
+}) {
+  if (series.length < 2) return null;
+
+  const W = 80;
+  const H = 24;
+  const PAD = { x: 2, y: 3 };
+
+  const points: Array<{ x: number; y: number }> = series.map((snap, i) => {
+    const valence = EMOTION_VALENCE[snap.emotion] ?? 0.5;
+    const x = PAD.x + (i / (series.length - 1)) * (W - PAD.x * 2);
+    const y = PAD.y + (1 - valence) * (H - PAD.y * 2);
+    return { x, y };
+  });
+
+  let pathD = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const cpx = (prev.x + curr.x) / 2;
+    pathD += ` C ${cpx} ${prev.y}, ${cpx} ${curr.y}, ${curr.x} ${curr.y}`;
+  }
+
+  const areaD = `${pathD} L ${points[points.length - 1].x} ${H} L ${points[0].x} ${H} Z`;
+
+  const avgValence =
+    series.reduce((sum, s) => sum + (EMOTION_VALENCE[s.emotion] ?? 0.5), 0) / series.length;
+  const baseColor =
+    dominantEmotion ? (EMOTION_COLORS[dominantEmotion] ?? "#9ca3af") : "#9ca3af";
+  const lineColor = avgValence >= 0.6 ? "#4ade80" : avgValence <= 0.35 ? "#f87171" : baseColor;
+
+  const gradId = `sg-${sessionId}`;
+
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      className="overflow-visible flex-shrink-0"
+    >
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={lineColor} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={lineColor} stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#${gradId})`} />
+      <path
+        d={pathD}
+        fill="none"
+        stroke={lineColor}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        opacity="0.9"
+      />
+      <circle
+        cx={points[points.length - 1].x}
+        cy={points[points.length - 1].y}
+        r="2"
+        fill={lineColor}
+        opacity="0.9"
+      />
+    </svg>
+  );
 }
 
 interface Props {
@@ -129,6 +208,7 @@ export default function SessionHistory({ currentSessionId, onSelectSession, onNe
             {sessions.map((session) => {
               const isCurrent = session.id === currentSessionId;
               const color = session.dominantEmotion ? EMOTION_COLORS[session.dominantEmotion] : null;
+              const hasSeries = session.emotionSeries && session.emotionSeries.length >= 2;
 
               return (
                 <button
@@ -164,7 +244,7 @@ export default function SessionHistory({ currentSessionId, onSelectSession, onNe
                         </span>
                       </div>
                     </div>
-                    <div className="flex-shrink-0">
+                    <div className="flex-shrink-0 flex flex-col items-end gap-2">
                       {color && session.dominantEmotion ? (
                         <span
                           className="text-[10px] font-medium px-2 py-0.5 rounded-full"
@@ -176,6 +256,13 @@ export default function SessionHistory({ currentSessionId, onSelectSession, onNe
                         <span className="text-[10px] text-muted-foreground/60 px-2 py-0.5 rounded-full bg-muted">
                           —
                         </span>
+                      )}
+                      {hasSeries && (
+                        <MiniSparkline
+                          series={session.emotionSeries!}
+                          dominantEmotion={session.dominantEmotion}
+                          sessionId={session.id}
+                        />
                       )}
                     </div>
                   </div>
