@@ -175,7 +175,7 @@ function App() {
         <div className="flex-none bg-black/30 backdrop-blur-md z-10 border-b border-white/8">
           {/* Brand row */}
           <div className="flex items-center justify-between px-5 py-2">
-            <div className="flex items-center gap-2.5">
+            <a href="/" className="flex items-center gap-2.5 no-underline hover:opacity-80 transition-opacity">
               <div className="logo-glow w-7 h-7 rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/20 border border-primary/30 flex items-center justify-center">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="text-primary">
                   <path d="M12 20.5c-5.25-4.8-10-9-10-13A5 5 0 0 1 12 4.93 5 5 0 0 1 22 7.5c0 4-4.75 8.2-10 13z" fill="currentColor" opacity="0.85" />
@@ -186,7 +186,7 @@ function App() {
                 <span className="text-xs font-bold tracking-wide text-foreground">EmpathIQ</span>
                 <span className="text-[8px] text-muted-foreground/60 tracking-widest uppercase mt-0.5">Emotional AI</span>
               </div>
-            </div>
+            </a>
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-primary/8">
               <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
               <span className="text-[10px] text-primary/80 font-medium">Live</span>
