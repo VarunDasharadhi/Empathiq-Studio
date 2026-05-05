@@ -23,7 +23,10 @@ interface Props {
   coachingText: string | null;
   coachingLoading: boolean;
   sessionId: number | null;
+  onMobileStateChange?: (state: "balanced" | "maximised" | "minimised") => void;
 }
+
+type PanelState = "balanced" | "maximised" | "minimised";
 
 const GLASS_CONTEXTS = [
   { id: "general",  label: "General",   emoji: "🧠", color: "#9ca3af" },
@@ -32,15 +35,24 @@ const GLASS_CONTEXTS = [
   { id: "detective",label: "Detective", emoji: "🕵️", color: "#fbbf24" },
 ];
 
-export default function SmartGlassesPanel({ detectedEmotion, coachingText, coachingLoading, sessionId }: Props) {
+export default function SmartGlassesPanel({ detectedEmotion, coachingText, coachingLoading, sessionId, onMobileStateChange }: Props) {
   const isMobile = useIsMobile();
   const [activeContext, setActiveContext] = useState(GLASS_CONTEXTS[0]);
+  const [panelState, setPanelState] = useState<PanelState>("balanced");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [coachKey, setCoachKey] = useState(0);
   const prevCoachRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const cyclePanelState = useCallback(() => {
+    setPanelState((prev) => {
+      const next: PanelState = prev === "balanced" ? "maximised" : prev === "maximised" ? "minimised" : "balanced";
+      onMobileStateChange?.(next);
+      return next;
+    });
+  }, [onMobileStateChange]);
 
   // Animate in new coaching text
   useEffect(() => {
@@ -98,11 +110,20 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
           </div>
           <div>
             <p className="text-xs md:text-sm font-semibold text-foreground">Smart Glasses</p>
-            <p className="text-[10px] text-muted-foreground hidden sm:block">Reading the person in front of you</p>
+            {panelState !== "minimised" && (
+              <p className="text-[10px] text-muted-foreground hidden sm:block">Reading the person in front of you</p>
+            )}
           </div>
+          {/* Mobile emotion badge when minimised */}
+          {isMobile && panelState === "minimised" && emotionCfg && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+              style={{ backgroundColor: `${emotionCfg.color}18`, color: emotionCfg.color, boxShadow: `0 0 0 1px ${emotionCfg.color}30` }}>
+              {emotionCfg.label}
+            </div>
+          )}
           <div className="ml-auto flex items-center gap-1.5">
-            {/* Mobile context dropdown */}
-            {isMobile && (
+            {/* Mobile context dropdown — hide when minimised */}
+            {isMobile && panelState !== "minimised" && (
               <ModeDropdown
                 modes={GLASS_CONTEXTS}
                 activeMode={activeContext}
@@ -112,14 +133,40 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
                 }}
               />
             )}
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
-              style={{ backgroundColor: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)" }}>
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[10px] font-medium text-emerald-400">Active</span>
-            </div>
+            {panelState !== "minimised" && (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+                style={{ backgroundColor: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)" }}>
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] font-medium text-emerald-400">Active</span>
+              </div>
+            )}
+            {/* Mobile expand/collapse toggle */}
+            {isMobile && (
+              <button
+                onClick={cyclePanelState}
+                className="flex-none w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/8 text-muted-foreground hover:text-foreground"
+                title={panelState === "balanced" ? "Maximise glasses" : panelState === "maximised" ? "Minimise glasses" : "Reset"}
+              >
+                {panelState === "maximised" ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                    <line x1="10" y1="14" x2="21" y2="3" /><line x1="3" y1="21" x2="14" y2="10" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                    <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                  </svg>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Content body — clips during parent flex-grow collapse animation */}
+      <div className="panel-body-grid flex-1 min-h-0">
+      <div className="panel-body-inner">
 
       <div className="flex-1 overflow-y-auto scrollbar-thin flex flex-col gap-3 px-4 py-3">
 
@@ -272,6 +319,9 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
             </svg>
           </button>
         </div>
+      </div>
+
+      </div>
       </div>
     </div>
   );

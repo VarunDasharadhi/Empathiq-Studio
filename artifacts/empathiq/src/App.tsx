@@ -282,6 +282,7 @@ function App() {
                 coachingText={coachingText}
                 coachingLoading={coachingLoading}
                 sessionId={sessionId}
+                onMobileStateChange={setMobilePanelState}
               />
             )}
             {rightPanel === "history" && (
