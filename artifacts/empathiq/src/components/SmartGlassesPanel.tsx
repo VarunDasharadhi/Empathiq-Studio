@@ -172,6 +172,31 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
         </div>
       </div>
 
+      {/* Desktop: context pill bar */}
+      {!isMobile && (
+        <div className="flex-none border-b border-white/6 bg-black/15">
+          <div className="flex items-center gap-1 px-3 py-2">
+            {GLASS_CONTEXTS.map((ctx) => (
+              <button
+                key={ctx.id}
+                onClick={() => handleContextSelect(ctx.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap"
+                style={activeContext.id === ctx.id ? {
+                  backgroundColor: `${ctx.color}18`,
+                  color: ctx.color,
+                  boxShadow: `0 0 0 1px ${ctx.color}30`,
+                } : { color: "var(--muted-foreground)" }}
+                onMouseEnter={(e) => { if (activeContext.id !== ctx.id) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "rgba(255,255,255,0.05)"; }}
+                onMouseLeave={(e) => { if (activeContext.id !== ctx.id) (e.currentTarget as HTMLButtonElement).style.backgroundColor = ""; }}
+              >
+                <span>{ctx.emoji}</span>
+                {ctx.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Content body — clips during parent flex-grow collapse animation */}
       <div className="panel-body-grid flex-1 min-h-0">
       <div className="panel-body-inner">
