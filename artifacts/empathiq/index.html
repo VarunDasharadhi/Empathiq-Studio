@@ -35,6 +35,9 @@
       --violet: #8b5cf6;
       --violet-light: #a78bfa;
       --pink: #ec4899;
+      --coral: #FF6B6B;
+      --coral-dim: rgba(255,107,107,0.15);
+      --coral-border: rgba(255,107,107,0.3);
       --fg: #f0f0f8;
       --muted: #8b8fa8;
       --card: rgba(255,255,255,0.04);
@@ -92,7 +95,7 @@
     #hero {
       min-height: 100vh;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      text-align: center; padding: 120px 24px 80px;
+      text-align: center; padding: 130px 24px 100px;
       position: relative; overflow: hidden;
     }
 
@@ -113,6 +116,11 @@
       width: 300px; height: 300px; bottom: 40px; left: -60px;
       background: radial-gradient(ellipse, rgba(236,72,153,0.12) 0%, transparent 70%);
       animation: orbPulse 7s ease-in-out 4s infinite;
+    }
+    .orb-coral {
+      width: 260px; height: 260px; top: 200px; right: -60px;
+      background: radial-gradient(ellipse, rgba(255,107,107,0.08) 0%, transparent 70%);
+      animation: orbPulseNoX 9s ease-in-out 1s infinite;
     }
     @keyframes orbPulse {
       0%, 100% { transform: translateX(-50%) scale(1); opacity: 1; }
@@ -140,7 +148,7 @@
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
     .hero-headline {
-      font-size: clamp(42px, 7vw, 88px);
+      font-size: clamp(40px, 7vw, 88px);
       font-weight: 400;
       background: linear-gradient(135deg, #fff 30%, var(--violet-light) 70%, var(--teal) 100%);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
@@ -173,6 +181,137 @@
       transition: all 0.4s ease;
     }
 
+    /* ── HERO SCREENSHOT MOCKUP ── */
+    .hero-screenshot-wrap {
+      position: relative; z-index: 1;
+      max-width: 900px; width: 100%;
+      margin: 48px auto 0;
+    }
+    .browser-mockup {
+      background: #0f1020;
+      border-radius: 14px;
+      border: 1px solid rgba(45,212,191,0.2);
+      box-shadow: 0 0 60px rgba(45,212,191,0.15), 0 0 120px rgba(45,212,191,0.06), 0 32px 80px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .browser-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px;
+      background: #151727;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .browser-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .browser-dot:nth-child(1) { background: #ff5f57; }
+    .browser-dot:nth-child(2) { background: #ffbd2e; }
+    .browser-dot:nth-child(3) { background: #28c840; }
+    .browser-url {
+      flex: 1; margin: 0 12px;
+      background: rgba(255,255,255,0.05); border-radius: 6px;
+      padding: 4px 12px; font-size: 11px; color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .browser-url-lock { color: var(--teal); font-size: 10px; }
+    .browser-content {
+      aspect-ratio: 16/7;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #0a0d1a 0%, #0d0a20 50%, #0a1a18 100%);
+      position: relative; overflow: hidden;
+    }
+    .browser-content-inner {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      position: relative; z-index: 1;
+    }
+    .screenshot-placeholder-icon {
+      width: 56px; height: 56px; border-radius: 16px;
+      background: linear-gradient(135deg, rgba(139,92,246,0.3), rgba(45,212,191,0.2));
+      border: 1px solid rgba(45,212,191,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+    }
+    .screenshot-placeholder-text {
+      font-size: 15px; color: var(--muted); font-weight: 500;
+    }
+    .screenshot-placeholder-sub {
+      font-size: 12px; color: rgba(139,143,168,0.5);
+    }
+    .browser-grid-overlay {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(rgba(45,212,191,0.04) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(45,212,191,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+    .browser-glow-overlay {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 30% 50%, rgba(139,92,246,0.1) 0%, transparent 60%),
+                  radial-gradient(ellipse at 70% 50%, rgba(45,212,191,0.08) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    /* ── HERO STAT BADGES ── */
+    .hero-stat-badges {
+      display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+      margin-top: 20px; position: relative; z-index: 1;
+    }
+    .stat-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: 100px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 13px; font-weight: 500; color: var(--fg);
+      transition: all 0.25s;
+    }
+    .stat-badge:hover {
+      border-color: rgba(45,212,191,0.35);
+      background: rgba(45,212,191,0.06);
+      transform: translateY(-2px);
+    }
+    .stat-badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+    }
+
+    /* ── FLOATING LIVE COUNTER ── */
+    .live-counter {
+      position: absolute;
+      top: 52%;
+      right: max(24px, calc(50% - 480px));
+      z-index: 2;
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; border-radius: 12px;
+      background: rgba(11,13,20,0.85);
+      border: 1px solid rgba(45,212,191,0.2);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      animation: floatCounter 4s ease-in-out infinite;
+    }
+    @keyframes floatCounter {
+      0%,100% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
+    }
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 0 0 rgba(34,197,94,0.4);
+      animation: livePulse 2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes livePulse {
+      0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+      70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); }
+      100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+    }
+    .live-counter-text {
+      display: flex; flex-direction: column;
+    }
+    .live-counter-label {
+      font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; line-height: 1;
+    }
+    .live-counter-value {
+      font-size: 15px; font-weight: 700; color: var(--fg); line-height: 1.3;
+    }
+
     .hero-ctas {
       display: flex; gap: 14px; margin-top: 44px; flex-wrap: wrap; justify-content: center;
       position: relative; z-index: 1;
@@ -195,7 +334,7 @@
     .btn-secondary:hover { transform: translateY(-2px); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.15); }
 
     /* ── SECTION COMMONS ── */
-    section { padding: 100px 24px; }
+    section { padding: 120px 24px; }
     .container { max-width: 1100px; margin: 0 auto; }
     .section-label {
       font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em;
@@ -204,6 +343,8 @@
     }
     .section-headline {
       font-size: clamp(32px, 5vw, 52px); margin-bottom: 16px;
+      background: linear-gradient(135deg, #fff 40%, var(--teal) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
     .section-sub { font-size: 17px; color: var(--muted); max-width: 600px; }
 
@@ -219,8 +360,8 @@
     }
     .pain-card:hover {
       transform: translateY(-4px);
-      box-shadow: 0 0 40px rgba(139,92,246,0.12);
-      border-color: rgba(139,92,246,0.25);
+      box-shadow: 0 0 40px rgba(255,107,107,0.08);
+      border-color: var(--coral-border);
     }
     .pain-icon { font-size: 28px; margin-bottom: 14px; }
     .pain-title { font-family: 'DM Serif Display', serif; font-size: 20px; margin-bottom: 8px; }
@@ -247,6 +388,75 @@
     .step-title { font-family: 'DM Serif Display', serif; font-size: 20px; margin-bottom: 8px; }
     .step-text { font-size: 13px; color: var(--muted); line-height: 1.6; }
     .steps-caption { text-align: center; margin-top: 36px; font-size: 14px; color: var(--muted); max-width: 520px; margin-left: auto; margin-right: auto; }
+
+    /* ── EMPATHIQ DIFFERENCE ── */
+    #difference {
+      background: var(--bg);
+    }
+    .difference-cards {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 56px;
+    }
+    .diff-card {
+      padding: 32px; border-radius: 20px;
+      background: var(--card); border: 1px solid var(--border);
+      position: relative; overflow: hidden;
+    }
+    .diff-card-generic {
+      border-color: rgba(255,107,107,0.25);
+      background: rgba(255,107,107,0.03);
+    }
+    .diff-card-generic::before {
+      content: '';
+      position: absolute; inset: 0; border-radius: inherit;
+      background: radial-gradient(ellipse at top left, rgba(255,107,107,0.06), transparent 60%);
+      pointer-events: none;
+    }
+    .diff-card-empathiq {
+      border-color: rgba(45,212,191,0.3);
+      background: rgba(45,212,191,0.03);
+    }
+    .diff-card-empathiq::before {
+      content: '';
+      position: absolute; inset: 0; border-radius: inherit;
+      background: radial-gradient(ellipse at top left, rgba(45,212,191,0.07), transparent 60%);
+      pointer-events: none;
+    }
+    .diff-card-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+    }
+    .diff-card-tag {
+      padding: 4px 12px; border-radius: 100px;
+      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .diff-tag-generic {
+      background: var(--coral-dim); color: var(--coral); border: 1px solid var(--coral-border);
+    }
+    .diff-tag-empathiq {
+      background: rgba(45,212,191,0.12); color: var(--teal); border: 1px solid rgba(45,212,191,0.3);
+    }
+    .diff-messages { display: flex; flex-direction: column; gap: 12px; }
+    .diff-bubble {
+      padding: 14px 18px; border-radius: 14px;
+      font-size: 14px; line-height: 1.6; color: var(--fg);
+    }
+    .diff-bubble-user {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07);
+      align-self: flex-end; max-width: 85%;
+    }
+    .diff-bubble-ai-generic {
+      background: rgba(255,107,107,0.07); border: 1px solid rgba(255,107,107,0.2);
+      color: rgba(240,240,248,0.85);
+    }
+    .diff-bubble-ai-empathiq {
+      background: rgba(45,212,191,0.07); border: 1px solid rgba(45,212,191,0.2);
+      color: rgba(240,240,248,0.85);
+    }
+    .diff-bubble-label {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+      margin-bottom: 6px; font-weight: 600;
+    }
+    .diff-label-generic { color: var(--coral); }
+    .diff-label-empathiq { color: var(--teal); }
 
     /* ── FEATURES ── */
     #features { background: var(--bg2); }
@@ -281,8 +491,29 @@
       font-style: italic; line-height: 1.35;
       background: linear-gradient(120deg, #fff 20%, var(--violet-light) 60%, var(--teal));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-      text-align: center; max-width: 800px; margin: 0 auto 56px;
+      text-align: center; max-width: 800px; margin: 0 auto 48px;
     }
+
+    /* ── VISION ILLUSTRATED CARDS ── */
+    .vision-use-cases {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      max-width: 860px; margin: 0 auto 56px;
+    }
+    .vision-use-card {
+      padding: 24px 18px; border-radius: 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .vision-use-card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(45,212,191,0.2);
+      box-shadow: 0 0 30px rgba(45,212,191,0.07);
+    }
+    .vision-use-emoji { font-size: 36px; display: block; margin-bottom: 12px; line-height: 1; }
+    .vision-use-text { font-size: 13px; color: var(--muted); line-height: 1.5; font-weight: 500; }
+
     .vision-list {
       display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; max-width: 700px; margin: 0 auto;
     }
@@ -305,7 +536,7 @@
       font-size: 13px; color: var(--muted); font-weight: 500;
       transition: all 0.2s;
     }
-    .tech-badge:hover { border-color: rgba(139,92,246,0.4); color: var(--violet-light); background: rgba(139,92,246,0.08); }
+    .tech-badge:hover { border-color: rgba(45,212,191,0.4); color: var(--teal); background: rgba(45,212,191,0.06); }
 
     .team-note {
       margin-top: 40px; padding: 28px; border-radius: 18px;
@@ -338,6 +569,13 @@
     .cta-github:hover { color: var(--fg); }
     .cta-tagline { margin-top: 60px; font-size: 12px; color: rgba(139,139,160,0.4); position: relative; z-index: 1; letter-spacing: 0.08em; }
 
+    /* ── CORAL ACCENT HIGHLIGHTS ── */
+    .coral-accent { color: var(--coral); }
+    .coral-label {
+      color: var(--coral);
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em;
+    }
+
     /* ── FOOTER ── */
     footer {
       border-top: 1px solid var(--border); padding: 28px 40px;
@@ -359,13 +597,20 @@
       .step-connector { width: 1px; height: 40px; background: linear-gradient(to bottom, rgba(139,92,246,0.5), rgba(45,212,191,0.5)); margin-bottom: 0; }
       .vision-list { grid-template-columns: 1fr; }
       .builtby-grid { grid-template-columns: 1fr; gap: 40px; }
+      .difference-cards { grid-template-columns: 1fr; }
+      .vision-use-cases { grid-template-columns: repeat(2, 1fr); }
+      .live-counter { right: 24px; top: auto; bottom: 180px; }
     }
     @media (max-width: 600px) {
-      section { padding: 70px 16px; }
+      section { padding: 80px 16px; }
+      .hero-headline { font-size: clamp(40px, 10vw, 64px); }
       .features-grid { grid-template-columns: 1fr; }
       .hero-ctas { flex-direction: column; align-items: stretch; }
       .btn-primary, .btn-secondary { text-align: center; justify-content: center; }
       footer { flex-direction: column; gap: 8px; text-align: center; }
+      .live-counter { display: none; }
+      .hero-stat-badges { gap: 8px; }
+      .stat-badge { font-size: 12px; padding: 7px 13px; }
     }
   </style>
 </head>
@@ -385,6 +630,16 @@
   <div class="orb orb-violet"></div>
   <div class="orb orb-teal"></div>
   <div class="orb orb-pink"></div>
+  <div class="orb orb-coral"></div>
+
+  <!-- Floating Live Counter -->
+  <div class="live-counter">
+    <div class="live-dot"></div>
+    <div class="live-counter-text">
+      <span class="live-counter-label">Live emotional readings</span>
+      <span class="live-counter-value" id="liveCounter">2,847</span>
+    </div>
+  </div>
 
   <div class="hero-badge">
     <span class="hero-badge-dot"></span>
@@ -400,6 +655,46 @@
   <div class="emotion-chip-wrap">
     <span class="emotion-chip-label">Detecting</span>
     <span class="emotion-chip" id="emotionChip">😊 Joy</span>
+  </div>
+
+  <!-- Product Screenshot Mockup -->
+  <div class="hero-screenshot-wrap reveal">
+    <div class="browser-mockup">
+      <div class="browser-bar">
+        <div class="browser-dot"></div>
+        <div class="browser-dot"></div>
+        <div class="browser-dot"></div>
+        <div class="browser-url">
+          <span class="browser-url-lock">🔒</span>
+          empathiq.replit.app/app
+        </div>
+      </div>
+      <div class="browser-content">
+        <div class="browser-grid-overlay"></div>
+        <div class="browser-glow-overlay"></div>
+        <div class="browser-content-inner">
+          <div class="screenshot-placeholder-icon">🧠</div>
+          <div class="screenshot-placeholder-text">Product screenshot</div>
+          <div class="screenshot-placeholder-sub">Replace with an actual screenshot of the app</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stat Badges -->
+  <div class="hero-stat-badges reveal" style="transition-delay:0.15s">
+    <div class="stat-badge">
+      <div class="stat-badge-dot" style="background:var(--coral);"></div>
+      7 Emotions Detected
+    </div>
+    <div class="stat-badge">
+      <div class="stat-badge-dot" style="background:var(--teal);"></div>
+      200ms Response
+    </div>
+    <div class="stat-badge">
+      <div class="stat-badge-dot" style="background:var(--violet-light);"></div>
+      8 Coaching Modes
+    </div>
   </div>
 
   <div class="hero-ctas">
@@ -496,12 +791,55 @@
       </div>
       <div class="step-connector reveal" style="transition-delay:0.3s"></div>
       <div class="step reveal" style="transition-delay:0.35s">
-        <div class="step-icon-wrap" style="border-color:rgba(236,72,153,0.3); background:rgba(236,72,153,0.05);">💬</div>
+        <div class="step-icon-wrap" style="border-color:rgba(255,107,107,0.3); background:rgba(255,107,107,0.05);">💬</div>
         <div class="step-title">Words</div>
         <p class="step-text">Claude reads your messages and fuses them with live face + voice data to craft contextually and emotionally aware replies.</p>
       </div>
     </div>
     <p class="steps-caption reveal">When your face shows sadness but your words say "I'm fine," EmpathIQ catches the dissonance and responds to what's real.</p>
+  </div>
+</section>
+
+<!-- ── EMPATHIQ DIFFERENCE ── -->
+<section id="difference">
+  <div class="container">
+    <p class="section-label reveal">The EmpathIQ Difference</p>
+    <h2 class="section-headline reveal">Same question. Worlds apart.</h2>
+    <p class="section-sub reveal">Generic AI gives you strategies. EmpathIQ gives you understanding — because it actually sees how you feel.</p>
+
+    <div class="difference-cards">
+      <!-- Generic AI Card -->
+      <div class="diff-card diff-card-generic reveal" style="transition-delay:0.1s">
+        <div class="diff-card-header">
+          <span class="diff-card-tag diff-tag-generic">Generic AI</span>
+        </div>
+        <div class="diff-messages">
+          <div class="diff-bubble diff-bubble-user">
+            "I've been so stressed with work lately…"
+          </div>
+          <div class="diff-bubble diff-bubble-ai-generic">
+            <div class="diff-bubble-label diff-label-generic">Response</div>
+            I understand you're feeling stressed. That's completely valid. Here are some strategies: deep breathing, setting boundaries, and practicing self-care.
+          </div>
+        </div>
+      </div>
+
+      <!-- EmpathIQ Card -->
+      <div class="diff-card diff-card-empathiq reveal" style="transition-delay:0.2s">
+        <div class="diff-card-header">
+          <span class="diff-card-tag diff-tag-empathiq">EmpathIQ</span>
+        </div>
+        <div class="diff-messages">
+          <div class="diff-bubble diff-bubble-user">
+            "I've been so stressed with work lately…"
+          </div>
+          <div class="diff-bubble diff-bubble-ai-empathiq">
+            <div class="diff-bubble-label diff-label-empathiq">Response</div>
+            Work stress, yeah. But honestly, your face is showing more sadness than frustration right now — is there something deeper going on beyond just the workload?
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -522,7 +860,7 @@
         <div class="feature-title">Coherence Score</div>
         <p class="feature-text">Real-time emotional coherence ring that scores alignment between what your face shows and what your words say — 0–100 live.</p>
       </div>
-      <div class="feature-card reveal" style="transition-delay:0.15s; --glow:rgba(236,72,153,0.06); --hover-border:rgba(236,72,153,0.3); --hover-glow:rgba(236,72,153,0.12)">
+      <div class="feature-card reveal" style="transition-delay:0.15s; --glow:rgba(255,107,107,0.06); --hover-border:rgba(255,107,107,0.3); --hover-glow:rgba(255,107,107,0.12)">
         <div class="feature-emoji">🔮</div>
         <div class="feature-title">Proactive Check-ins</div>
         <p class="feature-text">If the AI detects sustained negative emotion for over 30 seconds, it gently reaches out — without you saying a word.</p>
@@ -552,6 +890,26 @@
     <p class="section-label reveal" style="text-align:center">Vision</p>
     <p class="vision-quote reveal">"The AI that speaks for those who can't."</p>
 
+    <!-- Illustrated Use Case Cards -->
+    <div class="vision-use-cases">
+      <div class="vision-use-card reveal" style="transition-delay:0.1s">
+        <span class="vision-use-emoji">🧒</span>
+        <div class="vision-use-text">Non-verbal children</div>
+      </div>
+      <div class="vision-use-card reveal" style="transition-delay:0.15s">
+        <span class="vision-use-emoji">👴</span>
+        <div class="vision-use-text">Elderly care</div>
+      </div>
+      <div class="vision-use-card reveal" style="transition-delay:0.2s">
+        <span class="vision-use-emoji">🧠</span>
+        <div class="vision-use-text">Mental health access</div>
+      </div>
+      <div class="vision-use-card reveal" style="transition-delay:0.25s">
+        <span class="vision-use-emoji">💙</span>
+        <div class="vision-use-text">Anyone feeling misunderstood</div>
+      </div>
+    </div>
+
     <div class="vision-list">
       <div class="vision-item reveal" style="transition-delay:0.1s">
         <div class="vision-dot"></div>
@@ -562,7 +920,7 @@
         <p class="vision-text">Longitudinal emotional health tracking with weekly insight reports</p>
       </div>
       <div class="vision-item reveal" style="transition-delay:0.2s">
-        <div class="vision-dot" style="background:var(--pink)"></div>
+        <div class="vision-dot" style="background:var(--coral)"></div>
         <p class="vision-text">Couples and group modes — reading the emotional room, not just one person</p>
       </div>
       <div class="vision-item reveal" style="transition-delay:0.25s">
@@ -677,7 +1035,7 @@
   const emotions = [
     { label: "😊 Joy", color: "#facc15" },
     { label: "😔 Sadness", color: "#60a5fa" },
-    { label: "😤 Anger", color: "#f87171" },
+    { label: "😤 Anger", color: "#FF6B6B" },
     { label: "😰 Anxiety", color: "#c084fc" },
     { label: "😌 Calm", color: "#4ade80" },
     { label: "😲 Surprise", color: "#fb923c" },
@@ -702,6 +1060,17 @@
   chip.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
   chip.style.color = '#facc15'; chip.style.borderColor = '#facc15';
   setInterval(cycleEmotion, 2800);
+
+  // ── LIVE COUNTER ──
+  const counterEl = document.getElementById('liveCounter');
+  let counterVal = 2847;
+  function tickCounter() {
+    const delta = Math.floor(Math.random() * 5) - 1;
+    counterVal = Math.max(2800, counterVal + delta);
+    counterEl.textContent = counterVal.toLocaleString();
+    setTimeout(tickCounter, 1800 + Math.random() * 1200);
+  }
+  setTimeout(tickCounter, 2000);
 
   // ── INTERSECTION OBSERVER ──
   const observer = new IntersectionObserver((entries) => {
