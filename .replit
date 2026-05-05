@@ -30,3 +30,5 @@ externalPort = 80
 [[ports]]
 localPort = 18093
 externalPort = 3000
+[env]
+DATABASE_URL = ""
