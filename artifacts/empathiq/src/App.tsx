@@ -231,9 +231,9 @@ function App() {
           {/* Left — webcam + emotion detection */}
           <div
             className={[
-              "md:w-1/2 md:h-full md:border-r md:border-b-0 border-b border-white/8 flex flex-col flex-none",
+              "md:w-1/2 md:h-full md:border-r md:border-b-0 border-b border-white/8 flex flex-col flex-none panel-state-transition",
               mobilePanelState === "maximised"
-                ? "hidden md:flex"
+                ? "h-0 overflow-hidden opacity-0 pointer-events-none md:h-full md:overflow-visible md:opacity-100 md:pointer-events-auto"
                 : mobilePanelState === "minimised"
                   ? "flex-1 md:flex-none md:w-1/2 md:h-full"
                   : "h-[42%] md:h-full",
@@ -253,7 +253,7 @@ function App() {
           {/* Right — panel */}
           <div
             className={[
-              "md:w-1/2 md:h-full flex flex-col min-h-0",
+              "md:w-1/2 md:h-full flex flex-col min-h-0 panel-state-transition",
               mobilePanelState === "minimised" ? "flex-none" : "flex-1",
             ].join(" ")}
           >

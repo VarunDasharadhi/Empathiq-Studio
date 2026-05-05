@@ -436,8 +436,9 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
         </div>
       </div>
 
-      {/* Collapsed state — show nothing else when minimised on mobile */}
-      {isMobile && panelState === "minimised" ? null : (<>
+      {/* Content body — animates collapse/expand via CSS grid row */}
+      <div className={`panel-body-grid flex-1 min-h-0 ${isMobile && panelState === "minimised" ? "collapsed" : "expanded"}`}>
+      <div className="panel-body-inner">
 
       {/* ── Mode tabs ── */}
       {/* Mobile: compact dropdown */}
@@ -714,7 +715,8 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
         </div>
       </div>
 
-      </>)}
+      </div>
+      </div>
 
       {/* ── Prompt editor modal ── */}
       {editingModeId && (() => {

@@ -705,8 +705,9 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
         </div>
       </div>
 
-      {/* Collapsed state — show nothing else when minimised on mobile */}
-      {isMobile && panelState === "minimised" ? null : (<>
+      {/* Content body — animates collapse/expand via CSS grid row */}
+      <div className={`panel-body-grid flex-1 min-h-0 ${isMobile && panelState === "minimised" ? "collapsed" : "expanded"}`}>
+      <div className="panel-body-inner">
 
       {/* Proactive check-in banner */}
       {checkIn && (
@@ -1083,7 +1084,8 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
         </div>
       </div>
 
-      </>)}
+      </div>
+      </div>
 
       {/* ── Prompt editor modal ── */}
       {editingModeId && (() => {

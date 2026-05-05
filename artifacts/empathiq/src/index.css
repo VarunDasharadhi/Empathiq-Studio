@@ -282,5 +282,27 @@
 
 /* ── Panel state transition ── */
 .panel-state-transition {
-  transition: all 300ms ease;
+  transition:
+    height 200ms ease-in-out,
+    opacity 200ms ease-in-out,
+    flex-grow 200ms ease-in-out,
+    grid-template-rows 200ms ease-in-out;
+}
+
+/* Panel body animated collapse/expand via CSS grid row */
+.panel-body-grid {
+  display: grid;
+  transition: grid-template-rows 200ms ease-in-out;
+}
+.panel-body-grid.expanded {
+  grid-template-rows: 1fr;
+}
+.panel-body-grid.collapsed {
+  grid-template-rows: 0fr;
+}
+.panel-body-inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
