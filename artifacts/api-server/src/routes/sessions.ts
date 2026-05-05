@@ -1,6 +1,4 @@
 import { Router, type IRouter } from "express";
-import { db, sessionsTable, sessionMessagesTable, emotionTimelineTable } from "@workspace/db";
-import { eq, desc, sql, inArray } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
@@ -11,12 +9,40 @@ function getAnthropic(): Anthropic {
   return _anthropic;
 }
 
-function isDbUnavailable(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes("Read-only file system") || msg.includes("ECONNREFUSED") || msg.includes("connection refused");
+let nextId = 1;
+
+interface SessionMessage {
+  id: number;
+  sessionId: number;
+  role: string;
+  content: string;
+  emotion: string | null;
+  createdAt: string;
 }
 
-function fakeSession(id = 0) {
+interface EmotionSnapshot {
+  id: number;
+  sessionId: number;
+  emotion: string;
+  confidence: number;
+  recordedAt: string;
+}
+
+interface Session {
+  id: number;
+  title: string;
+  startedAt: string;
+  endedAt: string | null;
+  messageCount: number;
+  dominantEmotion: string | null;
+  summary: string | null;
+}
+
+const sessions = new Map<number, Session>();
+const messages = new Map<number, SessionMessage[]>();
+const emotions = new Map<number, EmotionSnapshot[]>();
+
+function makeSession(id: number): Session {
   return {
     id,
     title: "New Session",
@@ -28,175 +54,84 @@ function fakeSession(id = 0) {
   };
 }
 
-router.post("/sessions", async (req, res) => {
-  try {
-    const [session] = await db
-      .insert(sessionsTable)
-      .values({ title: "New Session" })
-      .returning();
-    res.json(session);
-  } catch (err) {
-    if (isDbUnavailable(err)) {
-      res.json(fakeSession(0));
-      return;
-    }
-    req.log.error({ err }, "Create session error");
-    res.status(500).json({ error: "Failed to create session" });
-  }
+router.post("/sessions", (_req, res) => {
+  const id = nextId++;
+  const session = makeSession(id);
+  sessions.set(id, session);
+  messages.set(id, []);
+  emotions.set(id, []);
+  res.json(session);
 });
 
-router.get("/sessions", async (req, res) => {
-  try {
-    const sessions = await db
-      .select()
-      .from(sessionsTable)
-      .orderBy(desc(sessionsTable.startedAt))
-      .limit(50);
+router.get("/sessions", (_req, res) => {
+  const all = Array.from(sessions.values()).sort(
+    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+  );
 
-    if (sessions.length === 0) {
-      res.json([]);
-      return;
-    }
-
-    const sessionIds = sessions.map((s) => s.id);
-    const allEmotions = await db
-      .select({
-        sessionId: emotionTimelineTable.sessionId,
-        emotion: emotionTimelineTable.emotion,
-        confidence: emotionTimelineTable.confidence,
-      })
-      .from(emotionTimelineTable)
-      .where(inArray(emotionTimelineTable.sessionId, sessionIds))
-      .orderBy(emotionTimelineTable.recordedAt);
-
-    const emotionsBySession: Record<number, Array<{ emotion: string; confidence: number }>> = {};
-    for (const e of allEmotions) {
-      if (!emotionsBySession[e.sessionId]) emotionsBySession[e.sessionId] = [];
-      emotionsBySession[e.sessionId].push({ emotion: e.emotion, confidence: e.confidence });
-    }
-
-    const MAX_SPARKLINE = 20;
-    const result = sessions.map((s) => {
-      const full = emotionsBySession[s.id] ?? [];
-      let sampled: Array<{ emotion: string; confidence: number }> = [];
-      if (full.length > MAX_SPARKLINE) {
-        const step = full.length / MAX_SPARKLINE;
-        for (let i = 0; i < MAX_SPARKLINE; i++) {
-          sampled.push(full[Math.floor(i * step)]);
-        }
-      } else {
-        sampled = full;
+  const MAX_SPARKLINE = 20;
+  const result = all.map((s) => {
+    const full = emotions.get(s.id) ?? [];
+    let sampled: Array<{ emotion: string; confidence: number }> = [];
+    if (full.length > MAX_SPARKLINE) {
+      const step = full.length / MAX_SPARKLINE;
+      for (let i = 0; i < MAX_SPARKLINE; i++) {
+        sampled.push(full[Math.floor(i * step)]);
       }
-      return { ...s, emotionSeries: sampled };
-    });
-
-    res.json(result);
-  } catch (err) {
-    if (isDbUnavailable(err)) {
-      res.json([]);
-      return;
+    } else {
+      sampled = full.map((e) => ({ emotion: e.emotion, confidence: e.confidence }));
     }
-    req.log.error({ err }, "List sessions error");
-    res.status(500).json({ error: "Failed to list sessions" });
-  }
+    return { ...s, emotionSeries: sampled };
+  });
+
+  res.json(result);
 });
 
-router.get("/sessions/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (id === 0) {
-      res.status(404).json({ error: "Session not found" });
-      return;
-    }
-    const [session] = await db
-      .select()
-      .from(sessionsTable)
-      .where(eq(sessionsTable.id, id));
-
-    if (!session) {
-      res.status(404).json({ error: "Session not found" });
-      return;
-    }
-
-    const messages = await db
-      .select()
-      .from(sessionMessagesTable)
-      .where(eq(sessionMessagesTable.sessionId, id))
-      .orderBy(sessionMessagesTable.createdAt);
-
-    const emotionTimeline = await db
-      .select()
-      .from(emotionTimelineTable)
-      .where(eq(emotionTimelineTable.sessionId, id))
-      .orderBy(emotionTimelineTable.recordedAt);
-
-    res.json({ session, messages, emotionTimeline });
-  } catch (err) {
-    if (isDbUnavailable(err)) {
-      res.status(404).json({ error: "Session not found" });
-      return;
-    }
-    req.log.error({ err }, "Get session error");
-    res.status(500).json({ error: "Failed to get session" });
+router.get("/sessions/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const session = sessions.get(id);
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
   }
+  res.json({
+    session,
+    messages: messages.get(id) ?? [],
+    emotionTimeline: emotions.get(id) ?? [],
+  });
 });
 
-router.patch("/sessions/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (id === 0) {
-      res.json(fakeSession(0));
-      return;
-    }
-    const { title, dominantEmotion, summary } = req.body as {
-      title?: string;
-      dominantEmotion?: string;
-      summary?: string;
-    };
-
-    const [updated] = await db
-      .update(sessionsTable)
-      .set({
-        endedAt: new Date(),
-        ...(title ? { title } : {}),
-        ...(dominantEmotion ? { dominantEmotion } : {}),
-        ...(summary ? { summary } : {}),
-      })
-      .where(eq(sessionsTable.id, id))
-      .returning();
-
-    res.json(updated);
-  } catch (err) {
-    if (isDbUnavailable(err)) {
-      res.json(fakeSession(Number(req.params.id)));
-      return;
-    }
-    req.log.error({ err }, "End session error");
-    res.status(500).json({ error: "Failed to end session" });
+router.patch("/sessions/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const session = sessions.get(id);
+  if (!session) {
+    res.status(404).json({ error: "Session not found" });
+    return;
   }
+  const { title, dominantEmotion, summary } = req.body as {
+    title?: string;
+    dominantEmotion?: string;
+    summary?: string;
+  };
+  session.endedAt = new Date().toISOString();
+  if (title) session.title = title;
+  if (dominantEmotion) session.dominantEmotion = dominantEmotion;
+  if (summary) session.summary = summary;
+  res.json(session);
 });
 
 router.post("/sessions/:id/summary", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (id === 0) {
+    const session = sessions.get(id);
+    if (!session) {
       res.json({ summary: null });
       return;
     }
 
-    const messages = await db
-      .select()
-      .from(sessionMessagesTable)
-      .where(eq(sessionMessagesTable.sessionId, id))
-      .orderBy(sessionMessagesTable.createdAt);
+    const sessionMessages = messages.get(id) ?? [];
+    const emotionTimeline = emotions.get(id) ?? [];
 
-    const emotionTimeline = await db
-      .select()
-      .from(emotionTimelineTable)
-      .where(eq(emotionTimelineTable.sessionId, id))
-      .orderBy(emotionTimelineTable.recordedAt);
-
-    if (messages.length === 0) {
+    if (sessionMessages.length === 0) {
       res.json({ summary: null });
       return;
     }
@@ -210,7 +145,7 @@ router.post("/sessions/:id/summary", async (req, res) => {
       .map(([e, c]) => `${e} (${c}x)`)
       .join(", ");
 
-    const transcript = messages
+    const transcript = sessionMessages
       .map((m) => `${m.role.toUpperCase()}${m.emotion ? ` [${m.emotion}]` : ""}: ${m.content}`)
       .join("\n");
 
@@ -239,15 +174,9 @@ Respond with only valid JSON, no markdown.`,
       parsed = { emotions: "Emotional journey recorded.", themes: "Conversation captured.", takeaway: "Every session is a step forward." };
     }
 
-    const summaryJson = JSON.stringify(parsed);
-    await db.update(sessionsTable).set({ summary: summaryJson }).where(eq(sessionsTable.id, id));
-
+    session.summary = JSON.stringify(parsed);
     res.json({ summary: parsed });
   } catch (err) {
-    if (isDbUnavailable(err)) {
-      res.json({ summary: null });
-      return;
-    }
     req.log.error({ err }, "Generate summary error");
     res.status(500).json({ error: "Failed to generate summary" });
   }
@@ -256,7 +185,8 @@ Respond with only valid JSON, no markdown.`,
 router.post("/sessions/:id/voice-summary", async (req, res) => {
   try {
     const id = Number(req.params.id);
-    if (id === 0) {
+    const session = sessions.get(id);
+    if (!session) {
       res.json({ summary: null });
       return;
     }
@@ -266,18 +196,14 @@ router.post("/sessions/:id/voice-summary", async (req, res) => {
       faceEmotionCounts: Record<string, number>;
     };
 
-    const messages = await db
-      .select()
-      .from(sessionMessagesTable)
-      .where(eq(sessionMessagesTable.sessionId, id))
-      .orderBy(sessionMessagesTable.createdAt);
+    const sessionMessages = messages.get(id) ?? [];
 
-    if (messages.length === 0) {
+    if (sessionMessages.length === 0) {
       res.json({ summary: null });
       return;
     }
 
-    const transcript = messages
+    const transcript = sessionMessages
       .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
       .join("\n");
 
@@ -346,84 +272,57 @@ Respond with ONLY valid JSON, no markdown.`,
       };
     }
 
-    const summaryJson = JSON.stringify(parsed);
-    await db.update(sessionsTable).set({ summary: summaryJson }).where(eq(sessionsTable.id, id));
-
+    session.summary = JSON.stringify(parsed);
     res.json({ summary: parsed });
   } catch (err) {
-    if (isDbUnavailable(err)) {
-      res.json({ summary: null });
-      return;
-    }
     req.log.error({ err }, "Voice summary error");
     res.status(500).json({ error: "Failed to generate voice summary" });
   }
 });
 
-router.post("/sessions/:id/messages", async (req, res) => {
-  try {
-    const sessionId = Number(req.params.id);
-    const { role, content, emotion } = req.body as {
-      role: "user" | "assistant";
-      content: string;
-      emotion?: string;
-    };
+router.post("/sessions/:id/messages", (req, res) => {
+  const sessionId = Number(req.params.id);
+  const session = sessions.get(sessionId);
+  const { role, content, emotion } = req.body as {
+    role: "user" | "assistant";
+    content: string;
+    emotion?: string;
+  };
 
-    if (sessionId === 0) {
-      res.json({ id: 0, sessionId, role, content, emotion: emotion ?? null, createdAt: new Date().toISOString() });
-      return;
-    }
-
-    const [message] = await db
-      .insert(sessionMessagesTable)
-      .values({ sessionId, role, content, emotion: emotion ?? null })
-      .returning();
-
-    await db
-      .update(sessionsTable)
-      .set({ messageCount: sql`${sessionsTable.messageCount} + 1` })
-      .where(eq(sessionsTable.id, sessionId));
-
-    res.json(message);
-  } catch (err) {
-    if (isDbUnavailable(err)) {
-      const { role, content, emotion } = req.body as { role: string; content: string; emotion?: string };
-      res.json({ id: 0, sessionId: Number(req.params.id), role, content, emotion: emotion ?? null, createdAt: new Date().toISOString() });
-      return;
-    }
-    req.log.error({ err }, "Add message error");
-    res.status(500).json({ error: "Failed to add message" });
+  if (!session) {
+    res.json({ id: 0, sessionId, role, content, emotion: emotion ?? null, createdAt: new Date().toISOString() });
+    return;
   }
+
+  const msg: SessionMessage = {
+    id: nextId++,
+    sessionId,
+    role,
+    content,
+    emotion: emotion ?? null,
+    createdAt: new Date().toISOString(),
+  };
+  (messages.get(sessionId) ?? []).push(msg);
+  session.messageCount += 1;
+  res.json(msg);
 });
 
-router.post("/sessions/:id/emotions", async (req, res) => {
-  try {
-    const sessionId = Number(req.params.id);
-    const { emotion, confidence } = req.body as {
-      emotion: string;
-      confidence: number;
-    };
+router.post("/sessions/:id/emotions", (req, res) => {
+  const sessionId = Number(req.params.id);
+  const { emotion, confidence } = req.body as { emotion: string; confidence: number };
 
-    if (sessionId === 0) {
-      res.json({ id: 0, sessionId, emotion, confidence, recordedAt: new Date().toISOString() });
-      return;
-    }
+  const snapshot: EmotionSnapshot = {
+    id: nextId++,
+    sessionId,
+    emotion,
+    confidence,
+    recordedAt: new Date().toISOString(),
+  };
 
-    const [snapshot] = await db
-      .insert(emotionTimelineTable)
-      .values({ sessionId, emotion, confidence })
-      .returning();
+  const list = emotions.get(sessionId);
+  if (list) list.push(snapshot);
 
-    res.json(snapshot);
-  } catch (err) {
-    if (isDbUnavailable(err)) {
-      const { emotion, confidence } = req.body as { emotion: string; confidence: number };
-      res.json({ id: 0, sessionId: Number(req.params.id), emotion, confidence, recordedAt: new Date().toISOString() });
-      return;
-    }
-    req.log.error({ err }, "Record emotion error");
-    res.status(500).json({ error: "Failed to record emotion" });
-  }
+  res.json(snapshot);
 });
 
 export default router;
