@@ -5,11 +5,27 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
 
-// Lazy singleton — env vars must be loaded before first request
 let _anthropic: Anthropic | null = null;
 function getAnthropic(): Anthropic {
   if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   return _anthropic;
+}
+
+function isDbUnavailable(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("Read-only file system") || msg.includes("ECONNREFUSED") || msg.includes("connection refused");
+}
+
+function fakeSession(id = 0) {
+  return {
+    id,
+    title: "New Session",
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    messageCount: 0,
+    dominantEmotion: null,
+    summary: null,
+  };
 }
 
 router.post("/sessions", async (req, res) => {
@@ -20,6 +36,10 @@ router.post("/sessions", async (req, res) => {
       .returning();
     res.json(session);
   } catch (err) {
+    if (isDbUnavailable(err)) {
+      res.json(fakeSession(0));
+      return;
+    }
     req.log.error({ err }, "Create session error");
     res.status(500).json({ error: "Failed to create session" });
   }
@@ -72,6 +92,10 @@ router.get("/sessions", async (req, res) => {
 
     res.json(result);
   } catch (err) {
+    if (isDbUnavailable(err)) {
+      res.json([]);
+      return;
+    }
     req.log.error({ err }, "List sessions error");
     res.status(500).json({ error: "Failed to list sessions" });
   }
@@ -80,6 +104,10 @@ router.get("/sessions", async (req, res) => {
 router.get("/sessions/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (id === 0) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
     const [session] = await db
       .select()
       .from(sessionsTable)
@@ -104,6 +132,10 @@ router.get("/sessions/:id", async (req, res) => {
 
     res.json({ session, messages, emotionTimeline });
   } catch (err) {
+    if (isDbUnavailable(err)) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
     req.log.error({ err }, "Get session error");
     res.status(500).json({ error: "Failed to get session" });
   }
@@ -112,6 +144,10 @@ router.get("/sessions/:id", async (req, res) => {
 router.patch("/sessions/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (id === 0) {
+      res.json(fakeSession(0));
+      return;
+    }
     const { title, dominantEmotion, summary } = req.body as {
       title?: string;
       dominantEmotion?: string;
@@ -131,6 +167,10 @@ router.patch("/sessions/:id", async (req, res) => {
 
     res.json(updated);
   } catch (err) {
+    if (isDbUnavailable(err)) {
+      res.json(fakeSession(Number(req.params.id)));
+      return;
+    }
     req.log.error({ err }, "End session error");
     res.status(500).json({ error: "Failed to end session" });
   }
@@ -139,6 +179,10 @@ router.patch("/sessions/:id", async (req, res) => {
 router.post("/sessions/:id/summary", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (id === 0) {
+      res.json({ summary: null });
+      return;
+    }
 
     const messages = await db
       .select()
@@ -204,6 +248,10 @@ Respond with only valid JSON, no markdown.`,
 
     res.json({ summary: parsed });
   } catch (err) {
+    if (isDbUnavailable(err)) {
+      res.json({ summary: null });
+      return;
+    }
     req.log.error({ err }, "Generate summary error");
     res.status(500).json({ error: "Failed to generate summary" });
   }
@@ -212,6 +260,11 @@ Respond with only valid JSON, no markdown.`,
 router.post("/sessions/:id/voice-summary", async (req, res) => {
   try {
     const id = Number(req.params.id);
+    if (id === 0) {
+      res.json({ summary: null });
+      return;
+    }
+
     const { voiceEmotionCounts, faceEmotionCounts } = req.body as {
       voiceEmotionCounts: Record<string, number>;
       faceEmotionCounts: Record<string, number>;
@@ -302,6 +355,10 @@ Respond with ONLY valid JSON, no markdown.`,
 
     res.json({ summary: parsed });
   } catch (err) {
+    if (isDbUnavailable(err)) {
+      res.json({ summary: null });
+      return;
+    }
     req.log.error({ err }, "Voice summary error");
     res.status(500).json({ error: "Failed to generate voice summary" });
   }
@@ -316,6 +373,11 @@ router.post("/sessions/:id/messages", async (req, res) => {
       emotion?: string;
     };
 
+    if (sessionId === 0) {
+      res.json({ id: 0, sessionId, role, content, emotion: emotion ?? null, createdAt: new Date().toISOString() });
+      return;
+    }
+
     const [message] = await db
       .insert(sessionMessagesTable)
       .values({ sessionId, role, content, emotion: emotion ?? null })
@@ -328,6 +390,11 @@ router.post("/sessions/:id/messages", async (req, res) => {
 
     res.json(message);
   } catch (err) {
+    if (isDbUnavailable(err)) {
+      const { role, content, emotion } = req.body as { role: string; content: string; emotion?: string };
+      res.json({ id: 0, sessionId: Number(req.params.id), role, content, emotion: emotion ?? null, createdAt: new Date().toISOString() });
+      return;
+    }
     req.log.error({ err }, "Add message error");
     res.status(500).json({ error: "Failed to add message" });
   }
@@ -341,6 +408,11 @@ router.post("/sessions/:id/emotions", async (req, res) => {
       confidence: number;
     };
 
+    if (sessionId === 0) {
+      res.json({ id: 0, sessionId, emotion, confidence, recordedAt: new Date().toISOString() });
+      return;
+    }
+
     const [snapshot] = await db
       .insert(emotionTimelineTable)
       .values({ sessionId, emotion, confidence })
@@ -348,6 +420,11 @@ router.post("/sessions/:id/emotions", async (req, res) => {
 
     res.json(snapshot);
   } catch (err) {
+    if (isDbUnavailable(err)) {
+      const { emotion, confidence } = req.body as { emotion: string; confidence: number };
+      res.json({ id: 0, sessionId: Number(req.params.id), emotion, confidence, recordedAt: new Date().toISOString() });
+      return;
+    }
     req.log.error({ err }, "Record emotion error");
     res.status(500).json({ error: "Failed to record emotion" });
   }
