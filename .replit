@@ -40,3 +40,4 @@ channel = "stable-25_05"
 
 [env]
 DATABASE_URL = ""
+DATABASE_URL = ""
