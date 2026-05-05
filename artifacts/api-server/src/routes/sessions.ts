@@ -240,11 +240,7 @@ Respond with only valid JSON, no markdown.`,
     }
 
     const summaryJson = JSON.stringify(parsed);
-
-    await db
-      .update(sessionsTable)
-      .set({ summary: summaryJson })
-      .where(eq(sessionsTable.id, id));
+    await db.update(sessionsTable).set({ summary: summaryJson }).where(eq(sessionsTable.id, id));
 
     res.json({ summary: parsed });
   } catch (err) {
