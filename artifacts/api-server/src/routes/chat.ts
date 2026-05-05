@@ -20,15 +20,16 @@ router.post("/proactive-checkin", async (req, res) => {
       model: "claude-sonnet-4-5",
       max_tokens: 60,
       system:
-        "You are a warm, gentle AI companion. " +
+        "You are a warm, perceptive AI companion. " +
         "The user has been showing signs of distress for a while. " +
-        "Write ONE very short, soft check-in message (max 15 words). " +
-        "Do not start with 'I'. Be gentle, not alarming. No emojis. " +
-        "Examples: 'Something feels heavy right now. Want to talk about it?' or 'Looks like things might be weighing on you. I'm here.'",
+        "Write ONE very short, casual check-in message (max 15 words). " +
+        "Never start with 'I understand', 'That\\'s completely valid', 'It sounds like', or 'I'. " +
+        "Use natural, human language. No emojis. " +
+        "Examples: 'Something feels heavy right now, want to talk about it?' or 'You\\'ve been carrying something for a bit, I\\'m here.' or 'Hey, you okay? Your face has been saying a lot.'",
       messages: [
         {
           role: "user",
-          content: `The user has shown ${emotion} emotion for about ${durationSeconds} seconds. Write a gentle check-in.`,
+          content: `The user has shown ${emotion} emotion for about ${durationSeconds} seconds. Write a gentle casual check-in.`,
         },
       ],
     });

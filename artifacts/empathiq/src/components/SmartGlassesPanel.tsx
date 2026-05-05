@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Emotion } from "@/App";
+import { useIsMobile } from "@/hooks/use-mobile";
+import ModeDropdown from "@/components/ModeDropdown";
 
 const EMOTION_CONFIG: Record<string, { label: string; color: string; bg: string; desc: string }> = {
   happy:     { label: "Happy",     color: "#facc15", bg: "rgba(250,204,21,0.12)",  desc: "They seem happy and open" },
@@ -23,7 +25,16 @@ interface Props {
   sessionId: number | null;
 }
 
+const GLASS_CONTEXTS = [
+  { id: "general",  label: "General",   emoji: "🧠", color: "#9ca3af" },
+  { id: "dating",   label: "Dating",    emoji: "💘", color: "#f472b6" },
+  { id: "sales",    label: "Sales",     emoji: "💼", color: "#34d399" },
+  { id: "detective",label: "Detective", emoji: "🕵️", color: "#fbbf24" },
+];
+
 export default function SmartGlassesPanel({ detectedEmotion, coachingText, coachingLoading, sessionId }: Props) {
+  const isMobile = useIsMobile();
+  const [activeContext, setActiveContext] = useState(GLASS_CONTEXTS[0]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -80,19 +91,32 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
     <div className="flex flex-col h-full bg-[#07090e]">
 
       {/* ── Header ── */}
-      <div className="flex-none px-4 pt-4 pb-3 border-b border-white/8">
+      <div className="flex-none px-3 pt-3 pb-2.5 md:px-4 md:pt-4 md:pb-3 border-b border-white/8">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-400/20 flex items-center justify-center text-xl flex-none">
+          <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-emerald-500/15 border border-emerald-400/20 flex items-center justify-center text-lg md:text-xl flex-none">
             🥽
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground">Smart Glasses</p>
-            <p className="text-[10px] text-muted-foreground">Reading the person in front of you</p>
+            <p className="text-xs md:text-sm font-semibold text-foreground">Smart Glasses</p>
+            <p className="text-[10px] text-muted-foreground hidden sm:block">Reading the person in front of you</p>
           </div>
-          <div className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded-lg"
-            style={{ backgroundColor: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)" }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-medium text-emerald-400">Active</span>
+          <div className="ml-auto flex items-center gap-1.5">
+            {/* Mobile context dropdown */}
+            {isMobile && (
+              <ModeDropdown
+                modes={GLASS_CONTEXTS}
+                activeMode={activeContext}
+                onSelect={(id) => {
+                  const ctx = GLASS_CONTEXTS.find((c) => c.id === id);
+                  if (ctx) setActiveContext(ctx);
+                }}
+              />
+            )}
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+              style={{ backgroundColor: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.2)" }}>
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] font-medium text-emerald-400">Active</span>
+            </div>
           </div>
         </div>
       </div>

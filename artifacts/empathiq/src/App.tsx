@@ -54,6 +54,7 @@ function App() {
   const [checkIn, setCheckIn] = useState<{ id: string; text: string } | null>(null);
   const [coachingText, setCoachingText] = useState<string | null>(null);
   const [coachingLoading, setCoachingLoading] = useState(false);
+  const [mobilePanelState, setMobilePanelState] = useState<"balanced" | "maximised" | "minimised">("balanced");
   const emotionCountRef = useRef<Record<string, number>>({});
 
   const createSession = useCallback(async () => {
@@ -135,6 +136,11 @@ function App() {
     setCoachingLoading(false);
   }, []);
 
+  // Reset mobile panel state when switching tabs
+  useEffect(() => {
+    setMobilePanelState("balanced");
+  }, [rightPanel]);
+
   // When entering glasses tab, reset coaching state
   useEffect(() => {
     if (rightPanel === "glasses") {
@@ -162,7 +168,7 @@ function App() {
           </div>
         </div>
       )}
-      <div className="flex flex-col h-full w-full overflow-hidden app-gradient-bg" style={{ minWidth: 768 }}>
+      <div className="flex flex-col h-full w-full overflow-hidden app-gradient-bg">
 
         {/* ── Nav bar ── */}
         <div className="flex-none bg-black/30 backdrop-blur-md z-10 border-b border-white/8">
@@ -221,9 +227,18 @@ function App() {
         </div>
 
         {/* ── Split layout ── */}
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-1 min-h-0 flex-col md:flex-row">
           {/* Left — webcam + emotion detection */}
-          <div className="w-1/2 h-full border-r border-white/8 flex flex-col">
+          <div
+            className={[
+              "md:w-1/2 md:h-full md:border-r md:border-b-0 border-b border-white/8 flex flex-col flex-none",
+              mobilePanelState === "maximised"
+                ? "hidden md:flex"
+                : mobilePanelState === "minimised"
+                  ? "flex-1 md:flex-none md:w-1/2 md:h-full"
+                  : "h-[42%] md:h-full",
+            ].join(" ")}
+          >
             <WebcamEmotion
               onEmotionChange={handleFaceEmotionChange}
               onSustainedNegative={handleSustainedNegative}
@@ -236,7 +251,12 @@ function App() {
           </div>
 
           {/* Right — panel */}
-          <div className="w-1/2 h-full flex flex-col">
+          <div
+            className={[
+              "md:w-1/2 md:h-full flex flex-col min-h-0",
+              mobilePanelState === "minimised" ? "flex-none" : "flex-1",
+            ].join(" ")}
+          >
             {rightPanel === "chat" && (
               <ChatInterface
                 currentEmotion={faceEmotion}
@@ -244,6 +264,7 @@ function App() {
                 checkIn={checkIn}
                 onDismissCheckIn={() => setCheckIn(null)}
                 onModeChange={() => {}}
+                onMobileStateChange={setMobilePanelState}
               />
             )}
             {rightPanel === "voice" && (
@@ -252,6 +273,7 @@ function App() {
                 onExitVoice={() => { setRightPanel("chat"); setVoiceEmotion(null); setVoiceEmotionScores(null); }}
                 sessionId={sessionId}
                 faceEmotionCounts={emotionCountRef.current}
+                onMobileStateChange={setMobilePanelState}
               />
             )}
             {rightPanel === "glasses" && (

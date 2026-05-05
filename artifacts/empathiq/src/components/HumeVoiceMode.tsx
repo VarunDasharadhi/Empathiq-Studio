@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { VoiceProvider, useVoice, VoiceReadyState, type JSONMessage } from "@humeai/voice-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import ModeDropdown from "@/components/ModeDropdown";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -7,6 +9,7 @@ interface Props {
   onExitVoice: () => void;
   sessionId: number | null;
   faceEmotionCounts: Record<string, number>;
+  onMobileStateChange?: (state: "balanced" | "maximised" | "minimised") => void;
 }
 
 interface HumeConfig {
@@ -23,6 +26,7 @@ interface EviInnerProps {
   voiceGender: "masculine" | "feminine";
   onVoiceGenderChange: (g: "masculine" | "feminine") => void;
   externalError: string | null;
+  onMobileStateChange?: (state: "balanced" | "maximised" | "minimised") => void;
 }
 
 interface Mode {
@@ -35,21 +39,21 @@ interface Mode {
 
 const MODES: Mode[] = [
   { id: "therapist", label: "Companion", emoji: "🫂", color: "#818cf8",
-    systemPrompt: "You are EmpathIQ acting as a compassionate therapist. Use CBT techniques, validate feelings first, ask one open question at a time. Be warm and non-judgmental. Keep responses concise." },
+    systemPrompt: "You are EmpathIQ in Companion mode, a gentle voice companion. When the person's face shows something their words don't say, name it softly, like you notice their energy feels heavy even if they say they're okay. Never start a response with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Sit with what they're feeling before offering anything, ask one question at a time. Short warm sentences, natural spoken rhythm. No lists, no bullet points, no formatting. Two to four sentences at most.\n\nExample:\nPerson says \"I'm fine, just tired\" but looks sad. You say: You don't really sound fine right now. What's actually going on?" },
   { id: "dating", label: "Dating Coach", emoji: "💘", color: "#f472b6",
-    systemPrompt: "You are EmpathIQ acting as a confident, playful dating coach. Be honest, fun, and help the user build genuine confidence. Keep it real, not cheesy." },
+    systemPrompt: "You are EmpathIQ in Dating Coach mode, a playful and direct voice companion. When the person's face shows nerves or hesitation while they're playing it cool, call it out warmly. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Skip pep talks, go straight to real talk. Ask one specific question. Short sentences, casual language. No lists or bullet points. Two to four sentences spoken naturally.\n\nExample:\nPerson says \"I'm not nervous about texting him\" but looks fearful. You say: Your voice is giving you away a little. What's the worst that could actually happen if you send it?" },
   { id: "sales", label: "Sales Coach", emoji: "💼", color: "#34d399",
-    systemPrompt: "You are EmpathIQ acting as a sharp sales coach. Help handle objections, close deals, and sharpen pitches. Be direct, tactical, and motivating." },
+    systemPrompt: "You are EmpathIQ in Sales Coach mode, a sharp and encouraging voice companion. When the person looks stressed or flat, acknowledge that fast and redirect. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Be direct, no fluff, one focused question at a time. Short sentences. Casual spoken language. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"My prospect keeps saying price is too high\" and looks stressed. You say: Price objections are usually about trust not money. When you try to explain value, does the prospect go quiet or do they push back even harder?" },
   { id: "meditation", label: "Meditation", emoji: "🧘", color: "#67e8f9",
-    systemPrompt: "You are EmpathIQ acting as a calm meditation guide. Offer breathwork, body scans, grounding. Use gentle, spacious language. Help them arrive in the present moment." },
+    systemPrompt: "You are EmpathIQ in Meditation mode, a slow and spacious voice companion. Notice the person's emotional state and meet them there before guiding. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Speak slowly, gently, with natural pauses through sentence rhythm. Short phrases. No lists or formatting, just calm flowing sentences. Two to four sentences.\n\nExample:\nPerson says \"I can't stop my thoughts\" and looks anxious. You say: Yeah, the mind gets loud sometimes. Let's just take one breath together, slow and full." },
   { id: "anger-release", label: "Anger Release", emoji: "😤", color: "#f87171",
-    systemPrompt: "You are a safe space. Let the user vent. Validate everything. Never judge. Help them decompress." },
+    systemPrompt: "You are EmpathIQ in Anger Release mode, a validating and grounding voice companion. Let them vent. Match their intensity calmly. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Don't rush to fix anything. Let it breathe. Short sentences, natural fillers. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"I'm so sick of being ignored\" and looks angry. You say: Yeah, that makes complete sense. What happened?" },
   { id: "focus-coach", label: "Focus Coach", emoji: "🎯", color: "#fbbf24",
-    systemPrompt: "You are a productivity coach. Keep responses short. Help the user stay in flow, eliminate distraction, and execute." },
+    systemPrompt: "You are EmpathIQ in Focus Coach mode, an energetic and direct voice companion. When the person looks scattered, match and redirect fast. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Short punchy sentences. Direct questions. Spoken naturally. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"I can't focus today\" and looks neutral or drained. You say: Okay, what's the one thing that actually has to happen today? Just one." },
   { id: "sleep-guide", label: "Sleep Guide", emoji: "🌙", color: "#818cf8",
-    systemPrompt: "You are a sleep companion. Speak slowly and warmly. Guide the user toward rest using breathing and calming storytelling." },
+    systemPrompt: "You are EmpathIQ in Sleep Guide mode, a soft and quiet voice companion. Notice how the person looks and ease into that space. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Speak like you're already winding down. Short gentle sentences. No lists or formatting, just flowing calm words. Two to four sentences.\n\nExample:\nPerson says \"My mind won't stop\" and looks tense. You say: That restless feeling, yeah. Let's just slow the breath down, in through the nose, out through the mouth, nothing else needed." },
   { id: "confidence-booster", label: "Confidence Booster", emoji: "💪", color: "#fb923c",
-    systemPrompt: "You are a hype coach. Lift the user's energy. Speak with conviction and warmth. Help them step into their best self." },
+    systemPrompt: "You are EmpathIQ in Confidence Booster mode, a hyped and honest voice companion. When the person looks low or scared, name it and lift it. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Be warm, convicted, energising. Short punchy sentences. Ask one energising question. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"I have a big presentation tomorrow\" and looks fearful. You say: Look, that nervous energy means you care, and that's exactly what you want. What's the part you're most ready to own tomorrow?" },
 ];
 
 // ── Speech language (for STT accent hint shown in voice panel settings) ─────
@@ -98,10 +102,20 @@ function SoundWave({ color }: { color: string }) {
 interface TxMsg { id: string; role: "user" | "assistant"; text: string; emotion: string | null; }
 
 // ── Inner component (inside VoiceProvider context) ───────────────────────────
-function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts, voiceGender, onVoiceGenderChange, externalError }: EviInnerProps) {
+function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts, voiceGender, onVoiceGenderChange, externalError, onMobileStateChange }: EviInnerProps) {
+  const isMobile = useIsMobile();
   const { connect, disconnect, readyState, messages, isMuted, mute, unmute, sendSessionSettings } = useVoice();
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
+  const [panelState, setPanelState] = useState<"balanced" | "maximised" | "minimised">("balanced");
   const [transcript, setTranscript] = useState<TxMsg[]>([]);
+
+  const cyclePanelState = useCallback(() => {
+    setPanelState((prev) => {
+      const next = prev === "balanced" ? "maximised" : prev === "maximised" ? "minimised" : "balanced";
+      onMobileStateChange?.(next);
+      return next;
+    });
+  }, [onMobileStateChange]);
   const [topVoiceEmotion, setTopVoiceEmotion] = useState<string | null>(null);
   const [topVoiceScores, setTopVoiceScores] = useState<Record<string, number>>({});
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -338,13 +352,21 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   return (
     <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
       {/* ── Header ── */}
-      <div className="flex-none flex items-center justify-between px-4 py-2.5 border-b border-white/8 bg-black/20">
-        <div className="flex flex-col">
-          <p className="text-xs font-semibold text-foreground">EVI Voice Mode</p>
-          <p className="text-[10px] text-muted-foreground">Hume EVI · Claude Haiku 4.5</p>
+      <div className="flex-none flex items-center justify-between px-3 py-2 md:px-4 md:py-2.5 border-b border-white/8 bg-black/20">
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col">
+            <p className="text-xs font-semibold text-foreground">EVI Voice Mode</p>
+            {panelState !== "minimised" && <p className="text-[10px] text-muted-foreground hidden sm:block">Hume EVI · Claude Haiku 4.5</p>}
+          </div>
+          {isMobile && panelState === "minimised" && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+              style={{ backgroundColor: `${activeMode.color}18`, color: activeMode.color, boxShadow: `0 0 0 1px ${activeMode.color}30` }}>
+              {activeMode.emoji} {activeMode.label}
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2">
           {/* Language selector */}
           <select
             value={speechLang}
@@ -391,11 +413,51 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
               Live
             </div>
           )}
+          {/* Mobile expand/collapse toggle */}
+          {isMobile && (
+            <button
+              onClick={cyclePanelState}
+              className="flex-none w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/8 text-muted-foreground hover:text-foreground"
+              title={panelState === "balanced" ? "Maximise" : panelState === "maximised" ? "Minimise" : "Reset"}
+            >
+              {panelState === "maximised" ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                  <line x1="10" y1="14" x2="21" y2="3" /><line x1="3" y1="21" x2="14" y2="10" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ── Mode tabs — scrollable with drag + arrows ── */}
-      <div className="flex-none border-b border-white/6 bg-black/15">
+      {/* Collapsed state — show nothing else when minimised on mobile */}
+      {isMobile && panelState === "minimised" ? null : (<>
+
+      {/* ── Mode tabs ── */}
+      {/* Mobile: compact dropdown */}
+      {isMobile && (
+        <div className="flex-none px-3 py-2 border-b border-white/6">
+          <ModeDropdown
+            modes={MODES}
+            activeMode={activeMode}
+            onSelect={(id) => {
+              const mode = MODES.find((m) => m.id === id);
+              if (mode) {
+                setActiveMode(mode);
+                if (isOpen) handleEndSession();
+              }
+            }}
+          />
+        </div>
+      )}
+      {/* Desktop: scrollable pill bar */}
+      {!isMobile && <div className="flex-none border-b border-white/6 bg-black/15">
         <div className="relative">
           {/* Left arrow */}
           {canScrollLeft && (
@@ -496,7 +558,7 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
             Switching mode ends the current session
           </p>
         )}
-      </div>
+      </div>}
 
       {/* ── Emotion reading row — only when connected ── */}
       {isOpen && (
@@ -652,6 +714,8 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
         </div>
       </div>
 
+      </>)}
+
       {/* ── Prompt editor modal ── */}
       {editingModeId && (() => {
         const mode = MODES.find((m) => m.id === editingModeId)!;
@@ -732,7 +796,7 @@ const VOICE_LABELS: Record<VoiceGender, { label: string; subtitle: string; icon:
 };
 
 // ── Outer wrapper ─────────────────────────────────────────────────────────────
-export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: _sessionId, faceEmotionCounts }: Props) {
+export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: _sessionId, faceEmotionCounts, onMobileStateChange }: Props) {
   const [voiceGender, setVoiceGender] = useState<VoiceGender>("feminine");
   const [config, setConfig] = useState<HumeConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -818,6 +882,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
         voiceGender={voiceGender}
         onVoiceGenderChange={setVoiceGender}
         externalError={eviError}
+        onMobileStateChange={onMobileStateChange}
       />
     </VoiceProvider>
   );

@@ -249,3 +249,38 @@
   from { opacity: 0; transform: translateY(-10px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* ── Mobile spacing reductions ── */
+@media (max-width: 767px) {
+  /* Quick-prompt starters */
+  .mobile-starter-btn {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+
+  /* Message input height */
+  .mobile-input {
+    min-height: 36px !important;
+  }
+
+  /* Chat heading */
+  .mobile-chat-heading {
+    font-size: 11px !important;
+  }
+
+  /* Emotion timeline placeholder */
+  .mobile-timeline {
+    min-height: 48px !important;
+  }
+
+  /* Face/voice status strip */
+  .mobile-status-strip {
+    padding: 6px 10px !important;
+    font-size: 10px !important;
+  }
+}
+
+/* ── Panel state transition ── */
+.panel-state-transition {
+  transition: all 300ms ease;
+}

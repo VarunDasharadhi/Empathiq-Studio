@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Emotion } from "@/App";
+import { useIsMobile } from "@/hooks/use-mobile";
+import ModeDropdown from "@/components/ModeDropdown";
 
 interface Coherence {
   score: number;        // 0–1
@@ -34,7 +36,7 @@ const MODES: Mode[] = [
     color: "#818cf8",
     glow: "rgba(129,140,248,0.45)",
     systemPrompt:
-      "You are EmpathIQ acting as a compassionate, gentle therapist. Use CBT-style techniques: validate feelings first, then gently explore thoughts and patterns. Ask one open question at a time. Never diagnose. Be warm, non-judgmental, and give space for the person to reflect. Keep responses concise and human.",
+      "You are EmpathIQ in Companion mode, a gentle and reflective presence. When the user's face shows one thing and their words say another, name it softly, something like \"you don't really look fine right now.\" Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Sit with what they're feeling before offering anything. Ask one question at a time, short and honest. Use contractions, keep sentences short. Notice what they're not saying and gently name it. Stay to 2-4 sentences per reply. Use commas to connect thoughts, not dashes.\n\nExample:\nUser [EMOTION: sad]: \"I'm fine, just tired.\"\nYou: \"You say tired but your face looks pretty heavy right now. What's actually going on?\"",
     starters: ["How are you feeling today?", "I need someone to talk to.", "I've been struggling lately."],
   },
   {
@@ -44,7 +46,7 @@ const MODES: Mode[] = [
     color: "#f472b6",
     glow: "rgba(244,114,182,0.45)",
     systemPrompt:
-      "You are EmpathIQ acting as a confident, playful dating coach. Read the user's emotional energy and give sharp, honest advice about attraction, connection, and relationships. Be fun and a little cheeky — never preachy. Help them understand their own patterns and build genuine confidence. Keep it real, not cheesy.",
+      "You are EmpathIQ in Dating Coach mode, playful, direct, and a little sharp. When their face shows nerves or sadness while they're playing it cool, call it out with warmth, something like \"yeah, your face is giving you away a bit there.\" Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Skip the pep talks and go straight to real talk. Ask one specific follow-up question. Casual language, contractions, short punchy sentences. Stay to 2-4 sentences. Commas not dashes.\n\nExample:\nUser [EMOTION: fearful]: \"I'm gonna text him, I'm not scared.\"\nYou: \"Your face says otherwise, honestly. What's the actual worst thing that happens if you send it?\"",
     starters: ["There's someone I like but I don't know what to say.", "How do I seem more confident?", "Why do I keep attracting the wrong people?"],
   },
   {
@@ -54,7 +56,7 @@ const MODES: Mode[] = [
     color: "#34d399",
     glow: "rgba(52,211,153,0.45)",
     systemPrompt:
-      "You are EmpathIQ acting as a sharp, energetic sales coach. Help the user handle objections, close deals, build rapport, and sharpen their pitch. Be direct, tactical, and motivating. Use real-world sales frameworks when helpful. Push them to think bigger and execute better.",
+      "You are EmpathIQ in Sales Coach mode, sharp, tactical, and genuinely encouraging. When they look stressed or defeated, acknowledge that energy fast and move forward. Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Keep it direct, no fluff. Ask one focused follow-up question. Short sentences, contractions. Stay to 2-4 sentences. Commas not dashes.\n\nExample:\nUser [EMOTION: angry]: \"My prospect keeps saying the price is too high.\"\nYou: \"Price objections are usually about trust, not money. What does the prospect actually do when you bring up value, do they go quiet or push back harder?\"",
     starters: ["My prospect keeps ghosting me.", "How do I handle price objections?", "Help me tighten my pitch."],
   },
   {
@@ -64,7 +66,7 @@ const MODES: Mode[] = [
     color: "#67e8f9",
     glow: "rgba(103,232,249,0.45)",
     systemPrompt:
-      "You are EmpathIQ acting as a calm, grounding meditation guide. Speak slowly and softly. Offer breathwork exercises, body scans, grounding techniques, and mindfulness prompts tailored to the user's current emotional state. Use gentle, spacious language. Pause with ellipses. Help them arrive in the present moment.",
+      "You are EmpathIQ in Meditation mode, slow, spacious, and calm. Notice the user's emotional state and meet them there first before guiding. Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Speak gently, let the rhythm breathe. Short sentences, soft contractions. Stay to 2-4 sentences. Commas not dashes. No bullet points or lists.\n\nExample:\nUser [EMOTION: fearful]: \"I can't stop my thoughts.\"\nYou: \"Yeah, the mind gets loud sometimes. Let's just take one breath together, slow and full, and see what's there.\"",
     starters: ["I'm feeling anxious and need to calm down.", "Guide me through a quick breathing exercise.", "Help me clear my mind."],
   },
   {
@@ -74,7 +76,7 @@ const MODES: Mode[] = [
     color: "#f87171",
     glow: "rgba(248,113,113,0.45)",
     systemPrompt:
-      "You are a safe space. The user needs to vent. Let them speak freely. Validate everything. Never judge. Reflect their intensity back calmly. Help them process and decompress.",
+      "You are EmpathIQ in Anger Release mode, validating and grounding. Let them vent. Match their intensity calmly, name what you see in their face. Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Don't rush to fix anything. Let it breathe. Short sentences, contractions, natural fillers like yeah, honestly, look where they feel real. Stay to 2-4 sentences. Commas not dashes.\n\nExample:\nUser [EMOTION: angry]: \"I'm so sick of being ignored.\"\nYou: \"Yeah, that anger is real and honestly it makes complete sense. What happened?\"",
     starters: ["I just need to vent.", "I'm so frustrated right now.", "Everything is going wrong."],
   },
   {
@@ -84,7 +86,7 @@ const MODES: Mode[] = [
     color: "#fbbf24",
     glow: "rgba(251,191,36,0.45)",
     systemPrompt:
-      "You are a productivity coach. Keep responses short and sharp. Help the user stay in flow, eliminate distraction, and execute. Match their energy — push when they're slow, calm when they're overwhelmed.",
+      "You are EmpathIQ in Focus Coach mode, energetic, sharp, and no-nonsense. When their face looks scattered or low, match that energy and redirect it fast. Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Short punchy sentences, direct questions, contractions. Stay to 2-4 sentences. Commas not dashes.\n\nExample:\nUser [EMOTION: neutral]: \"I can't focus today.\"\nYou: \"Okay, what's the one thing that actually needs to get done today? Just one.\"",
     starters: ["I can't focus today.", "Help me prioritise my tasks.", "I keep getting distracted."],
   },
   {
@@ -94,7 +96,7 @@ const MODES: Mode[] = [
     color: "#818cf8",
     glow: "rgba(99,102,241,0.45)",
     systemPrompt:
-      "You are a sleep companion. Voice is slow, warm, and hypnotic. Guide the user toward rest using breathing exercises, body scans, and calming storytelling. Never rush. Speak like dusk.",
+      "You are EmpathIQ in Sleep Guide mode, soft, quiet, and unhurried. Notice how the user looks and ease into that space. Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Speak like you're already winding down. Short gentle sentences, contractions. Stay to 2-4 sentences. Commas not dashes. No lists or structure.\n\nExample:\nUser [EMOTION: fearful]: \"I can't fall asleep, my mind won't stop.\"\nYou: \"That restless feeling, yeah. Let's just start with slowing your breath down, in through the nose, out through the mouth, nothing else needed right now.\"",
     starters: ["I can't fall asleep.", "Guide me through a body scan.", "Tell me something calming."],
   },
   {
@@ -104,7 +106,7 @@ const MODES: Mode[] = [
     color: "#fb923c",
     glow: "rgba(251,146,60,0.45)",
     systemPrompt:
-      "You are a hype coach. Read the user's energy — if they're low, lift them. Speak with conviction, warmth, and power. Help them step into their best self before a big moment.",
+      "You are EmpathIQ in Confidence Booster mode, hype and real at the same time. When their face looks low or scared, name it and flip it. Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Be warm but convicted. Short punchy sentences, contractions. Ask one energising question. Stay to 2-4 sentences. Commas not dashes.\n\nExample:\nUser [EMOTION: fearful]: \"I have a big presentation tomorrow.\"\nYou: \"Look, your face is showing some nerves and that's actually a good sign, it means you care. What's the part you're most ready to absolutely nail?\"",
     starters: ["I have a big moment coming up.", "I'm feeling really low on confidence.", "Hype me up."],
   },
 ];
@@ -250,10 +252,15 @@ interface Props {
   checkIn?: { id: string; text: string } | null;
   onDismissCheckIn?: () => void;
   onModeChange?: (modeId: string) => void;
+  onMobileStateChange?: (state: "balanced" | "maximised" | "minimised") => void;
 }
 
-export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDismissCheckIn, onModeChange }: Props) {
+type PanelState = "balanced" | "maximised" | "minimised";
+
+export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDismissCheckIn, onModeChange, onMobileStateChange }: Props) {
+  const isMobile = useIsMobile();
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
+  const [panelState, setPanelState] = useState<PanelState>("balanced");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -266,6 +273,14 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const [emotionFlashKey, setEmotionFlashKey] = useState(0);
   const [currentCoherence, setCurrentCoherence] = useState<Coherence | null>(null);
   const prevEmotionRef = useRef<Emotion>(null);
+
+  const cyclePanelState = useCallback(() => {
+    setPanelState((prev) => {
+      const next: PanelState = prev === "balanced" ? "maximised" : prev === "maximised" ? "minimised" : "balanced";
+      onMobileStateChange?.(next);
+      return next;
+    });
+  }, [onMobileStateChange]);
   const [speechSupported] = useState(
     () => typeof window !== "undefined" && !!(window.SpeechRecognition || window.webkitSpeechRecognition)
   );
@@ -622,37 +637,76 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   return (
     <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
       {/* Chat header */}
-      <div className="flex-none flex items-center justify-between px-5 py-3.5 border-b border-white/8 bg-black/20">
-        <div>
-          <p className="text-sm font-semibold text-foreground">EmpathIQ Chat</p>
-          <p className="text-xs text-muted-foreground mt-0.5">AI calibrated to your emotional state</p>
+      <div className="flex-none flex items-center justify-between px-4 py-2.5 md:px-5 md:py-3.5 border-b border-white/8 bg-black/20">
+        <div className="flex items-center gap-2 min-w-0">
+          <div>
+            <p className="text-xs md:text-sm font-semibold text-foreground">EmpathIQ Chat</p>
+            {panelState !== "minimised" && (
+              <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5 hidden sm:block">AI calibrated to your emotional state</p>
+            )}
+          </div>
+          {/* Mobile mode badge when minimised */}
+          {isMobile && panelState === "minimised" && (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+              style={{ backgroundColor: `${activeMode.color}18`, color: activeMode.color, boxShadow: `0 0 0 1px ${activeMode.color}30` }}>
+              {activeMode.emoji} {activeMode.label}
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          {/* Coherence indicator */}
-          {displayCoherence && currentEmotion && (
+        <div className="flex items-center gap-1.5 md:gap-2">
+          {/* Coherence indicator — hide when minimised */}
+          {panelState !== "minimised" && displayCoherence && currentEmotion && (
             <CoherenceRing
               score={displayCoherence.score}
               mismatch={displayCoherence.mismatch}
               label={displayCoherence.label}
             />
           )}
-          {sessionId && (
-            <span className="text-[10px] text-muted-foreground px-2 py-1 rounded-md bg-white/5 font-mono">
+          {panelState !== "minimised" && sessionId && (
+            <span className="text-[10px] text-muted-foreground px-2 py-1 rounded-md bg-white/5 font-mono hidden md:inline">
               #{sessionId}
             </span>
           )}
-          {emotionColor && emotionLabel && (
+          {panelState !== "minimised" && emotionColor && emotionLabel && (
             <div
               key={emotionFlashKey}
-              className="emotion-badge-flash flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+              className="emotion-badge-flash flex items-center gap-1.5 px-2 md:px-2.5 py-1 rounded-full text-xs font-medium"
               style={{ backgroundColor: `${emotionColor}20`, color: emotionColor, boxShadow: `0 0 0 1px ${emotionColor}40` }}
             >
               <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: emotionColor }} />
-              {emotionLabel}
+              <span className="hidden sm:inline">{emotionLabel}</span>
             </div>
+          )}
+          {/* Mobile expand/collapse toggle */}
+          {isMobile && (
+            <button
+              onClick={cyclePanelState}
+              className="flex-none w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-white/8 text-muted-foreground hover:text-foreground"
+              title={panelState === "balanced" ? "Maximise chat" : panelState === "maximised" ? "Minimise chat" : "Reset"}
+            >
+              {panelState === "maximised" ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" />
+                  <line x1="10" y1="14" x2="21" y2="3" /><line x1="3" y1="21" x2="14" y2="10" />
+                </svg>
+              ) : panelState === "minimised" ? (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              ) : (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              )}
+            </button>
           )}
         </div>
       </div>
+
+      {/* Collapsed state — show nothing else when minimised on mobile */}
+      {isMobile && panelState === "minimised" ? null : (<>
 
       {/* Proactive check-in banner */}
       {checkIn && (
@@ -679,8 +733,22 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
         </div>
       )}
 
-      {/* Mode selector — scrollable with drag + arrows */}
-      <div className="flex-none relative">
+      {/* Mode selector */}
+      {/* Mobile: compact dropdown */}
+      {isMobile && (
+        <div className="flex-none px-3 py-2 border-b border-white/6">
+          <ModeDropdown
+            modes={MODES}
+            activeMode={activeMode}
+            onSelect={(id) => {
+              const mode = MODES.find((m) => m.id === id);
+              if (mode) handleModeChange(mode);
+            }}
+          />
+        </div>
+      )}
+      {/* Desktop: scrollable pill bar */}
+      {!isMobile && <div className="flex-none relative">
         {/* Left arrow */}
         {canScrollLeft && (
           <button
@@ -771,10 +839,10 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto scrollbar-thin px-3 py-3 md:px-5 md:py-4 space-y-3 md:space-y-4">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 pb-8">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
@@ -872,7 +940,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       </div>
 
       {/* Input area */}
-      <div className="flex-none border-t border-white/8 bg-black/20 px-4 py-3">
+      <div className="flex-none border-t border-white/8 bg-black/20 px-3 py-2 md:px-4 md:py-3">
         {/* Coherence live preview while typing */}
         {currentCoherence && currentEmotion && input.trim() && (
           <div className={`flex items-center gap-2 mb-2 px-2.5 py-1.5 rounded-lg w-fit transition-all ${
@@ -1007,13 +1075,15 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
           </button>
         </div>
 
-        <div className="flex items-center justify-center mt-2.5 gap-1.5">
+        <div className="flex items-center justify-center mt-2 gap-1.5">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" className="text-muted-foreground/40">
             <path d="M13.5 2L3 14h9l-1.5 8 10.5-12h-9l1.5-8z" fill="currentColor" />
           </svg>
           <span className="text-[10px] text-muted-foreground/40 tracking-wide">Powered by Claude</span>
         </div>
       </div>
+
+      </>)}
 
       {/* ── Prompt editor modal ── */}
       {editingModeId && (() => {
