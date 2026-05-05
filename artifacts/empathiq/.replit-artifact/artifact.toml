@@ -23,6 +23,10 @@ publicDir = "artifacts/empathiq/dist/public"
 serve = "static"
 
 [[services.production.rewrites]]
+from = "/app"
+to = "/app.html"
+
+[[services.production.rewrites]]
 from = "/*"
 to = "/index.html"
 
