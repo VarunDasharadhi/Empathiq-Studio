@@ -25,3 +25,10 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Landing Page
+- Static investor/buildathon landing page at `artifacts/empathiq/public/landing.html`
+- Served directly by Vite's static file server at `/landing.html`
+- Single-file HTML with embedded CSS+JS — no build step required
+- Sections: Hero (typewriter + gradient orbs + live emotion chip), Problem, How It Works, Features, Vision, Built By, CTA Footer
+- Typography: DM Serif Display + DM Sans (Google Fonts)

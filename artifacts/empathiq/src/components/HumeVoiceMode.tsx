@@ -52,6 +52,15 @@ const MODES: Mode[] = [
     systemPrompt: "You are a hype coach. Lift the user's energy. Speak with conviction and warmth. Help them step into their best self." },
 ];
 
+// ── Speech language (for STT accent hint shown in voice panel settings) ─────
+type SpeechLang = "en-GB" | "en-US" | "en-IN" | "en-AU";
+const SPEECH_LANGS: { value: SpeechLang; flag: string; label: string }[] = [
+  { value: "en-GB", flag: "🇬🇧", label: "English (UK)" },
+  { value: "en-US", flag: "🇺🇸", label: "English (US)" },
+  { value: "en-IN", flag: "🇮🇳", label: "English (India)" },
+  { value: "en-AU", flag: "🇦🇺", label: "English (Australia)" },
+];
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function topEmotion(scores: Record<string, number>): string | null {
   const entries = Object.entries(scores);
@@ -109,6 +118,8 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   const touchDrag = useRef({ startX: 0, scrollLeft: 0 });
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const [speechLang, setSpeechLang] = useState<SpeechLang>("en-GB");
 
   const [customPrompts, setCustomPrompts] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem("empathiq_prompts") ?? "{}") as Record<string, string>; } catch { return {}; }
@@ -269,6 +280,7 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   };
   const onModeBarMouseUp = () => {
     dragState.current.active = false;
+    dragState.current.moved = 0;
     if (modeBarRef.current) modeBarRef.current.style.cursor = "grab";
   };
   const onModeBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -333,6 +345,18 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Language selector */}
+          <select
+            value={speechLang}
+            onChange={(e) => setSpeechLang(e.target.value as SpeechLang)}
+            className="h-7 rounded-lg bg-white/5 border border-white/10 text-muted-foreground text-[10px] px-1.5 focus:outline-none cursor-pointer hover:bg-white/8 transition-colors"
+            title={SPEECH_LANGS.find(l => l.value === speechLang)?.label ?? "Speech language"}
+          >
+            {SPEECH_LANGS.map(l => (
+              <option key={l.value} value={l.value}>{l.flag} {l.label}</option>
+            ))}
+          </select>
+
           {/* Voice gender toggle — locked while session is live */}
           <div className="flex items-center rounded-lg overflow-hidden border border-white/10 text-[10px] font-medium">
             {(["feminine", "masculine"] as const).map((g) => {

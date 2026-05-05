@@ -597,6 +597,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   };
   const onModeBarMouseUp = () => {
     dragState.current.active = false;
+    dragState.current.moved = 0;
     if (modeBarRef.current) modeBarRef.current.style.cursor = "grab";
   };
   const onModeBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -960,18 +961,6 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
           />
           {speechSupported && (
             <div className="flex items-end gap-1">
-              {/* Language selector — 4 locales, defaults to en-GB */}
-              <select
-                value={speechLang}
-                onChange={(e) => setSpeechLang(e.target.value as SpeechLang)}
-                disabled={isRecording || lowConfidence}
-                className="h-11 rounded-xl bg-white/5 border border-white/10 text-muted-foreground text-[10px] px-1.5 focus:outline-none cursor-pointer hover:bg-white/8 transition-colors disabled:opacity-40"
-                title={SPEECH_LANGS.find(l => l.value === speechLang)?.label ?? "Speech language"}
-              >
-                {SPEECH_LANGS.map(l => (
-                  <option key={l.value} value={l.value}>{l.flag}</option>
-                ))}
-              </select>
               {/* Retry button shown when mic failed */}
               {micFailed && !isRecording && !lowConfidence && (
                 <button
