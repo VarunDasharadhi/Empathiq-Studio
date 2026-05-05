@@ -1,0 +1,43 @@
+Here's where EmpathIQ stands heading into the new session:
+
+EmpathIQ — Project State Summary
+What it is
+An emotionally intelligent AI companion — React+Vite frontend (artifacts/empathiq), Express+TypeScript API (artifacts/api-server), Drizzle ORM + PostgreSQL. Three right-panel tabs: Chat, Voice (Hume AI), Smart Glasses.
+
+Recently completed (all merged)
+Task #4 — Emotion journey chart
+Session History now shows sparkline charts (valence over time) per session card. Session Replay shows a full scrollable emotion timeline with labeled points and valence bands.
+
+Task #5 — Open Graph / social sharing
+landing.html has OG + Twitter Card meta tags with a 1200×630 opengraph.jpg. URL is currently hardcoded to the dev domain.
+
+Task #6 — Smart Glasses context modes
+The four coaching contexts (General, Dating, Sales, Detective) are now wired end-to-end: the backend uses mode-specific system prompts for both the coaching HUD (/glasses-coaching) and the in-panel chat (/chat). The selected context flows from SmartGlassesPanel → App.tsx → WebcamEmotion.
+
+Task #7 — Panel slide animations
+Chat and Voice panels now animate smoothly open/close on mobile via CSS flex-grow transitions. prefers-reduced-motion is respected. Competing grid-row animation was removed to prevent snapping.
+
+Task #10 — Smart Glasses panel animation
+Smart Glasses panel got the same mobile expand/collapse button + panel-body-grid/panel-body-inner structure, wired to mobilePanelState in App.tsx.
+
+In progress / pending tasks
+#	Task	Status
+#8	Fix API server so voice sessions + proactive check-ins work after deploy	In Progress
+#9	Auto-update OG image URL when a custom domain is configured	Pending
+#11	Hover over sparklines to see emotion details	Proposed
+#12	Cross-session emotion summary chart	Proposed
+#13	Keep emotion chart data live during active session	Proposed
+#14	Remember selected coaching mode between sessions	Proposed
+#15	Show active coaching mode in the webcam HUD overlay	Proposed
+#16	Context-aware quick-tip questions in Smart Glasses chat	Proposed
+#17	Graceful startup when API keys are missing	Proposed
+#18	Split API server bundle to fix 2.4 MB size warning	Proposed
+Key files to know
+artifacts/empathiq/src/App.tsx — main state, tab routing, mobilePanelState, glassesContext
+artifacts/empathiq/src/components/ChatInterface.tsx — chat panel with emotion coherence
+artifacts/empathiq/src/components/HumeVoiceMode.tsx — voice panel
+artifacts/empathiq/src/components/SmartGlassesPanel.tsx — glasses panel with context modes
+artifacts/empathiq/src/components/WebcamEmotion.tsx — face detection + coaching fetch
+artifacts/empathiq/src/index.css — .panel-state-transition, .panel-body-grid/.inner classes
+artifacts/api-server/src/routes/chat.ts — /chat, /glasses-coaching endpoints
+artifacts/api-server/src/routes/sessions.ts — session CRUD + emotion timeline
