@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "postgresql-16"]
+modules = ["nodejs-24"]
 
 [deployment]
 router = "application"
@@ -37,3 +37,6 @@ externalPort = 80
 
 [nix]
 channel = "stable-25_05"
+
+[env]
+DATABASE_URL = ""
