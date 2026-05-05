@@ -436,8 +436,8 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
         </div>
       </div>
 
-      {/* Content body — animates collapse/expand via CSS grid row */}
-      <div className={`panel-body-grid flex-1 min-h-0 ${isMobile && panelState === "minimised" ? "collapsed" : "expanded"}`}>
+      {/* Content body — clips during parent flex-grow collapse animation */}
+      <div className="panel-body-grid flex-1 min-h-0">
       <div className="panel-body-inner">
 
       {/* ── Mode tabs ── */}

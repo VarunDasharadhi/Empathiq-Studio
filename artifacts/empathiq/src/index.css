@@ -285,24 +285,37 @@
   transition:
     height 200ms ease-in-out,
     opacity 200ms ease-in-out,
-    flex-grow 200ms ease-in-out,
-    grid-template-rows 200ms ease-in-out;
+    flex-grow 200ms ease-in-out;
 }
 
-/* Panel body animated collapse/expand via CSS grid row */
+/* Panel body — content is clipped by overflow:hidden during parent
+   flex-grow animation; expanded/collapsed classes available for
+   single-layer grid-row animation when needed (e.g. SmartGlassesPanel) */
 .panel-body-grid {
   display: grid;
-  transition: grid-template-rows 200ms ease-in-out;
 }
 .panel-body-grid.expanded {
   grid-template-rows: 1fr;
+  transition: grid-template-rows 200ms ease-in-out;
 }
 .panel-body-grid.collapsed {
   grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease-in-out;
 }
 .panel-body-inner {
   overflow: hidden;
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .panel-state-transition {
+    transition: none;
+  }
+  .panel-body-grid.expanded,
+  .panel-body-grid.collapsed {
+    transition: none;
+  }
 }
