@@ -2,7 +2,13 @@ import { Router, type IRouter } from "express";
 import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Lazy singleton — env vars must be loaded before first request
+let _anthropic: Anthropic | null = null;
+function getAnthropic(): Anthropic {
+  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return _anthropic;
+}
 
 // Voice options: ITO = masculine, KORA = feminine
 // v2 suffix forces config recreation with updated eou_sensitivity setting
@@ -110,7 +116,7 @@ router.post("/evi/chat", async (req, res) => {
 
     const systemPrompt = body.system ?? SYSTEM_PROMPT;
 
-    const response = await anthropic.messages.create({
+    const response = await getAnthropic().messages.create({
       model: "claude-haiku-4-5",
       max_tokens: body.max_tokens ?? 200,
       system: systemPrompt,

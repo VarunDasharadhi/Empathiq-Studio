@@ -3,7 +3,12 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Lazy singleton — env vars must be loaded before first request
+let _client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return _client;
+}
 
 const BASE_SUFFIX = `\n\nYou will always receive the user's current facial emotion as [EMOTION: X] at the start of their message. Calibrate your response tone to that emotion naturally — never mention that you can see their face.`;
 
@@ -16,7 +21,7 @@ router.post("/proactive-checkin", async (req, res) => {
       durationSeconds: number;
     };
 
-    const response = await client.messages.create({
+    const response = await getClient().messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 60,
       system:
@@ -76,7 +81,7 @@ router.post("/glasses-coaching", async (req, res) => {
 
     const systemPrompt = COACHING_CONTEXT_PROMPTS[context ?? "general"] ?? COACHING_CONTEXT_PROMPTS.general;
 
-    const response = await client.messages.create({
+    const response = await getClient().messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 50,
       system: systemPrompt,
@@ -118,7 +123,7 @@ router.post("/emotion-reading", async (req, res) => {
     const faceDesc = faceEmotion ? `Face: ${faceEmotion} (${Math.round(faceConfidence * 100)}% confidence)` : "Face: not detected";
     const voiceDesc = voiceEmotion ? `Voice: ${voiceEmotion}${topVoiceEmotions ? ` — top signals: ${topVoiceEmotions}` : ""}` : "Voice: not active";
 
-    const response = await client.messages.create({
+    const response = await getClient().messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 80,
       system:
@@ -179,7 +184,7 @@ router.post("/chat", async (req, res) => {
       system = DEFAULT_SYSTEM_PROMPT;
     }
 
-    const response = await client.messages.create({
+    const response = await getClient().messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 1024,
       system,

@@ -1,6 +1,14 @@
-import "dotenv/config";
-import app from "./app";
-import { logger } from "./lib/logger";
+import dotenv from "dotenv";
+
+// Load .env before any route module initializes — static imports are hoisted
+// in ESM, so we use dotenv's default import (synchronous) first, then
+// dynamically import the rest so they see the populated env.
+dotenv.config();
+
+const [{ default: app }, { logger }] = await Promise.all([
+  import("./app"),
+  import("./lib/logger"),
+]);
 
 const rawPort = process.env["PORT"];
 

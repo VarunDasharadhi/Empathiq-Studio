@@ -4,7 +4,13 @@ import { eq, desc, sql, inArray } from "drizzle-orm";
 import Anthropic from "@anthropic-ai/sdk";
 
 const router: IRouter = Router();
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Lazy singleton — env vars must be loaded before first request
+let _anthropic: Anthropic | null = null;
+function getAnthropic(): Anthropic {
+  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return _anthropic;
+}
 
 router.post("/sessions", async (req, res) => {
   try {
@@ -164,7 +170,7 @@ router.post("/sessions/:id/summary", async (req, res) => {
       .map((m) => `${m.role.toUpperCase()}${m.emotion ? ` [${m.emotion}]` : ""}: ${m.content}`)
       .join("\n");
 
-    const response = await anthropic.messages.create({
+    const response = await getAnthropic().messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 300,
       system: `You are a compassionate journaling assistant. Given a conversation transcript with detected facial emotions, write a brief mood journal entry. Format your response as JSON with exactly three fields:
@@ -255,7 +261,7 @@ router.post("/sessions/:id/voice-summary", async (req, res) => {
       : "neutral";
     const valencesMatch = faceDominantValence === voiceDominantValence;
 
-    const response = await anthropic.messages.create({
+    const response = await getAnthropic().messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 400,
       system: `You are EmpathIQ's session analyst. Given a voice conversation transcript plus facial and vocal emotion data, produce a rich session summary as JSON with exactly these fields:
