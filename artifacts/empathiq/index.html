@@ -409,18 +409,25 @@
     </a>
   </div>
 
-  <div style="max-width: 800px; margin: 2rem auto; border-radius: 16px; overflow: hidden; box-shadow: 0 0 40px rgba(0, 200, 200, 0.15); position: relative; z-index: 1;">
-    <div style="position: relative; padding-bottom: 56.25%; height: 0;">
-      <iframe
-        src="https://www.youtube.com/embed/GNxleo1goMI?rel=0&modestbranding=1"
-        title="EmpathIQ Demo"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen
-        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
-      </iframe>
+  <a href="https://www.youtube.com/watch?v=GNxleo1goMI" target="_blank" rel="noopener"
+     style="display:block; max-width:800px; width:100%; margin:2rem auto 0; border-radius:16px; overflow:hidden; box-shadow:0 0 40px rgba(0,200,200,0.15); position:relative; z-index:1; text-decoration:none; aspect-ratio:16/9; background:linear-gradient(135deg,#0d0a1a 0%,#1a0d2e 40%,#0a1a1a 100%);">
+    <img
+      src="https://img.youtube.com/vi/GNxleo1goMI/maxresdefault.jpg"
+      alt="EmpathIQ Demo"
+      style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0.85;"
+      onerror="this.style.display='none'"
+    />
+    <div style="position:absolute; inset:0; background-image:linear-gradient(rgba(139,92,246,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(139,92,246,0.07) 1px,transparent 1px); background-size:40px 40px; pointer-events:none;"></div>
+    <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;">
+      <div style="width:80px; height:80px; border-radius:50%; background:rgba(139,92,246,0.9); display:flex; align-items:center; justify-content:center; box-shadow:0 0 40px rgba(139,92,246,0.7);">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </div>
+      <div style="text-align:center;">
+        <div style="color:#fff; font-size:16px; font-weight:600; margin-bottom:4px;">Watch EmpathIQ Demo</div>
+        <div style="color:rgba(255,255,255,0.5); font-size:12px;">Opens on YouTube ↗</div>
+      </div>
     </div>
-  </div>
+  </a>
 </section>
 
 <!-- ── PROBLEM ── -->
