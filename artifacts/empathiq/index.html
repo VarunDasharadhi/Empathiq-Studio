@@ -409,8 +409,10 @@
     </a>
   </div>
 
-  <a href="https://www.youtube.com/watch?v=GNxleo1goMI" target="_blank" rel="noopener"
-     style="display:block; max-width:800px; width:100%; margin:2rem auto 0; border-radius:16px; overflow:hidden; box-shadow:0 0 40px rgba(0,200,200,0.15); position:relative; z-index:1; text-decoration:none; aspect-ratio:16/9; background:linear-gradient(135deg,#0d0a1a 0%,#1a0d2e 40%,#0a1a1a 100%);">
+  <div id="demoThumb" onclick="openVideoModal()"
+     style="cursor:pointer; display:block; max-width:800px; width:100%; margin:2rem auto 0; border-radius:16px; overflow:hidden; box-shadow:0 0 40px rgba(0,200,200,0.15); position:relative; z-index:1; aspect-ratio:16/9; background:linear-gradient(135deg,#0d0a1a 0%,#1a0d2e 40%,#0a1a1a 100%); transition:transform 0.2s, box-shadow 0.2s;"
+     onmouseenter="this.style.transform='scale(1.01)';this.style.boxShadow='0 0 60px rgba(0,200,200,0.25)'"
+     onmouseleave="this.style.transform='scale(1)';this.style.boxShadow='0 0 40px rgba(0,200,200,0.15)'">
     <img
       src="https://img.youtube.com/vi/GNxleo1goMI/maxresdefault.jpg"
       alt="EmpathIQ Demo"
@@ -424,10 +426,26 @@
       </div>
       <div style="text-align:center;">
         <div style="color:#fff; font-size:16px; font-weight:600; margin-bottom:4px;">Watch EmpathIQ Demo</div>
-        <div style="color:rgba(255,255,255,0.5); font-size:12px;">Opens on YouTube ↗</div>
+        <div style="color:rgba(255,255,255,0.5); font-size:12px;">Click to play</div>
       </div>
     </div>
-  </a>
+  </div>
+
+  <!-- Video Lightbox -->
+  <div id="videoModal" onclick="closeVideoModal()" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.88); backdrop-filter:blur(12px); align-items:center; justify-content:center; padding:24px;">
+    <div onclick="event.stopPropagation()" style="position:relative; width:100%; max-width:900px; aspect-ratio:16/9; border-radius:16px; overflow:hidden; box-shadow:0 0 80px rgba(139,92,246,0.3);">
+      <iframe
+        id="demoIframe"
+        src=""
+        title="EmpathIQ Demo"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+        allowfullscreen
+        style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;">
+      </iframe>
+    </div>
+    <button onclick="closeVideoModal()" style="position:fixed; top:20px; right:24px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; width:40px; height:40px; border-radius:50%; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(8px);">✕</button>
+  </div>
 </section>
 
 <!-- ── PROBLEM ── -->
@@ -614,6 +632,23 @@
 </footer>
 
 <script>
+  // ── VIDEO MODAL ──
+  function openVideoModal() {
+    const modal = document.getElementById('videoModal');
+    const iframe = document.getElementById('demoIframe');
+    iframe.src = 'https://www.youtube.com/embed/GNxleo1goMI?autoplay=1&rel=0&modestbranding=1';
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+  function closeVideoModal() {
+    const modal = document.getElementById('videoModal');
+    const iframe = document.getElementById('demoIframe');
+    iframe.src = '';
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeVideoModal(); });
+
   // ── TYPEWRITER ──
   const phrases = [
     "It doesn't just hear you.",
