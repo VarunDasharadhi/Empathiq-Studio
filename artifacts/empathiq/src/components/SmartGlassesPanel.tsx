@@ -24,6 +24,7 @@ interface Props {
   coachingLoading: boolean;
   sessionId: number | null;
   onMobileStateChange?: (state: "balanced" | "maximised" | "minimised") => void;
+  onContextChange?: (contextId: string) => void;
 }
 
 type PanelState = "balanced" | "maximised" | "minimised";
@@ -35,7 +36,7 @@ const GLASS_CONTEXTS = [
   { id: "detective",label: "Detective", emoji: "🕵️", color: "#fbbf24" },
 ];
 
-export default function SmartGlassesPanel({ detectedEmotion, coachingText, coachingLoading, sessionId, onMobileStateChange }: Props) {
+export default function SmartGlassesPanel({ detectedEmotion, coachingText, coachingLoading, sessionId, onMobileStateChange, onContextChange }: Props) {
   const isMobile = useIsMobile();
   const [activeContext, setActiveContext] = useState(GLASS_CONTEXTS[0]);
   const [panelState, setPanelState] = useState<PanelState>("balanced");
@@ -53,6 +54,14 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
       return next;
     });
   }, [onMobileStateChange]);
+
+  const handleContextSelect = useCallback((id: string) => {
+    const ctx = GLASS_CONTEXTS.find((c) => c.id === id);
+    if (ctx) {
+      setActiveContext(ctx);
+      onContextChange?.(id);
+    }
+  }, [onContextChange]);
 
   // Animate in new coaching text
   useEffect(() => {
@@ -76,26 +85,28 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
 
     try {
       const emotionCtx = detectedEmotion
-        ? `The person in front of me appears to be ${EMOTION_CONFIG[detectedEmotion]?.label ?? detectedEmotion}. `
+        ? `[Detected emotion of person in front: ${EMOTION_CONFIG[detectedEmotion]?.label ?? detectedEmotion}] `
         : "";
+      const history = messages.map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.text,
+      }));
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: `${emotionCtx}${text}`,
-          emotion: detectedEmotion,
-          mode: "smart-glasses",
-          sessionId,
+          messages: [...history, { role: "user", content: `${emotionCtx}${text}` }],
+          context: activeContext.id,
         }),
       });
-      const data = await res.json() as { reply: string };
-      setMessages((prev) => [...prev, { role: "assistant", text: data.reply ?? "…" }]);
+      const data = await res.json() as { content: string };
+      setMessages((prev) => [...prev, { role: "assistant", text: data.content ?? "…" }]);
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", text: "Couldn't reach EmpathIQ right now." }]);
     } finally {
       setSending(false);
     }
-  }, [input, sending, detectedEmotion, sessionId]);
+  }, [input, sending, detectedEmotion, messages, activeContext.id]);
 
   const emotionCfg = detectedEmotion ? EMOTION_CONFIG[detectedEmotion] : null;
 
@@ -127,10 +138,7 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
               <ModeDropdown
                 modes={GLASS_CONTEXTS}
                 activeMode={activeContext}
-                onSelect={(id) => {
-                  const ctx = GLASS_CONTEXTS.find((c) => c.id === id);
-                  if (ctx) setActiveContext(ctx);
-                }}
+                onSelect={handleContextSelect}
               />
             )}
             {panelState !== "minimised" && (

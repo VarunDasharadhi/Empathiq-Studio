@@ -43,19 +43,43 @@ router.post("/proactive-checkin", async (req, res) => {
   }
 });
 
+const COACHING_CONTEXT_PROMPTS: Record<string, string> = {
+  general:
+    "You are a real-time conversation coach whispering tips to the user via a HUD overlay. " +
+    "The user's camera is facing OUTWARD — you are reading the OTHER person's face. " +
+    "Give ONE ultra-short, actionable social coaching tip based on that person's emotional state. " +
+    "Max 12 words. No emojis. Address the user directly with what to DO. " +
+    "Examples: 'Slow down — give them room to respond.' or 'They're open. Land your key point now.' or 'Ease the tension — try a light, warm remark.'",
+  dating:
+    "You are a real-time dating coach whispering tips to the user via a HUD overlay. " +
+    "The user's camera is facing OUTWARD — you are reading the OTHER person's face to gauge romantic interest. " +
+    "Give ONE ultra-short, actionable dating tip based on their emotional cues — look for attraction, engagement, nervousness, or disinterest. " +
+    "Max 12 words. No emojis. Address the user directly with what to DO. " +
+    "Examples: 'They're intrigued — lean in and ask something personal.' or 'Tension's building — hold eye contact and smile.' or 'They're pulling back — give them a little space.'",
+  sales:
+    "You are a real-time sales coach whispering tips to the user via a HUD overlay. " +
+    "The user's camera is facing OUTWARD — you are reading the OTHER person's face to spot buying signals. " +
+    "Give ONE ultra-short, actionable sales tip based on their emotional state — look for interest, hesitation, skepticism, or readiness to commit. " +
+    "Max 12 words. No emojis. Address the user directly with what to DO. " +
+    "Examples: 'They're engaged — present the value now.' or 'Skepticism showing — address the objection directly.' or 'They're ready — go for the close.'",
+  detective:
+    "You are a real-time behavioral analyst whispering tips to the user via a HUD overlay. " +
+    "The user's camera is facing OUTWARD — you are reading the OTHER person's face for truthfulness cues, stress signals, and concealment. " +
+    "Give ONE ultra-short observation or action tip based on their emotional microexpressions. " +
+    "Max 12 words. No emojis. Address the user directly with what to DO or notice. " +
+    "Examples: 'Stress spike — they're uncomfortable with that topic.' or 'Microexpression of contempt — they disagree.' or 'Genuine calm — they believe what they're saying.'",
+};
+
 router.post("/glasses-coaching", async (req, res) => {
   try {
-    const { emotion, confidence } = req.body as { emotion: string; confidence: number };
+    const { emotion, confidence, context } = req.body as { emotion: string; confidence: number; context?: string };
+
+    const systemPrompt = COACHING_CONTEXT_PROMPTS[context ?? "general"] ?? COACHING_CONTEXT_PROMPTS.general;
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-5",
       max_tokens: 50,
-      system:
-        "You are a real-time conversation coach whispering tips to the user via a HUD overlay. " +
-        "The user's camera is facing OUTWARD — you are reading the OTHER person's face. " +
-        "Give ONE ultra-short, actionable coaching tip based on that person's emotional state. " +
-        "Max 12 words. No emojis. No 'they' or pronouns — address the user directly with what to DO. " +
-        "Examples: 'Slow down — give them room to respond.' or 'They're open. Land your key point now.' or 'Ease the tension — try a light, warm remark.'",
+      system: systemPrompt,
       messages: [
         {
           role: "user",
@@ -114,11 +138,31 @@ router.post("/emotion-reading", async (req, res) => {
   }
 });
 
+const CHAT_CONTEXT_PROMPTS: Record<string, string> = {
+  general:
+    "You are EmpathIQ, an emotionally intelligent AI companion helping with real-time social coaching. " +
+    "The user is wearing smart glasses and reading the emotions of the person in front of them. " +
+    "Give warm, practical, human advice on navigating the conversation.",
+  dating:
+    "You are EmpathIQ, a dating coach helping the user read romantic interest in real time via smart glasses. " +
+    "Interpret emotional cues in terms of attraction, openness, nervousness, and disinterest. " +
+    "Give direct, confident, practical dating advice. Be warm but honest.",
+  sales:
+    "You are EmpathIQ, a sales coach helping the user spot buying signals and handle objections in real time via smart glasses. " +
+    "Interpret emotional cues in terms of interest, skepticism, hesitation, and readiness to close. " +
+    "Give sharp, action-oriented sales advice.",
+  detective:
+    "You are EmpathIQ, a behavioral analyst helping the user read truthfulness, stress, and concealment in real time via smart glasses. " +
+    "Interpret emotional microexpressions in terms of deception cues, discomfort, genuine reactions, and suppressed emotions. " +
+    "Give precise, observational insights and suggest follow-up questions.",
+};
+
 router.post("/chat", async (req, res) => {
   try {
-    const { messages, systemPrompt } = req.body as {
+    const { messages, systemPrompt, context } = req.body as {
       messages: Array<{ role: "user" | "assistant"; content: string }>;
       systemPrompt?: string;
+      context?: string;
     };
 
     if (!messages || !Array.isArray(messages)) {
@@ -126,9 +170,14 @@ router.post("/chat", async (req, res) => {
       return;
     }
 
-    const system = systemPrompt
-      ? `${systemPrompt}${BASE_SUFFIX}`
-      : DEFAULT_SYSTEM_PROMPT;
+    let system: string;
+    if (systemPrompt) {
+      system = `${systemPrompt}${BASE_SUFFIX}`;
+    } else if (context && CHAT_CONTEXT_PROMPTS[context]) {
+      system = `${CHAT_CONTEXT_PROMPTS[context]}${BASE_SUFFIX}`;
+    } else {
+      system = DEFAULT_SYSTEM_PROMPT;
+    }
 
     const response = await client.messages.create({
       model: "claude-sonnet-4-5",

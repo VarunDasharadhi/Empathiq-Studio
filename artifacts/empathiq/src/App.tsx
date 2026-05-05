@@ -54,6 +54,7 @@ function App() {
   const [checkIn, setCheckIn] = useState<{ id: string; text: string } | null>(null);
   const [coachingText, setCoachingText] = useState<string | null>(null);
   const [coachingLoading, setCoachingLoading] = useState(false);
+  const [glassesContext, setGlassesContext] = useState("general");
   const [mobilePanelState, setMobilePanelState] = useState<"balanced" | "maximised" | "minimised">("balanced");
   const emotionCountRef = useRef<Record<string, number>>({});
 
@@ -247,6 +248,7 @@ function App() {
               voiceEmotionScores={voiceEmotionScores}
               glassesMode={rightPanel === "glasses"}
               onCoachingText={handleCoachingText}
+              glassesContext={glassesContext}
             />
           </div>
 
@@ -283,6 +285,7 @@ function App() {
                 coachingLoading={coachingLoading}
                 sessionId={sessionId}
                 onMobileStateChange={setMobilePanelState}
+                onContextChange={setGlassesContext}
               />
             )}
             {rightPanel === "history" && (

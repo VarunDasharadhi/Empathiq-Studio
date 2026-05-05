@@ -62,6 +62,7 @@ interface Props {
   voiceEmotionScores?: Record<string, number> | null;
   glassesMode?: boolean;
   onCoachingText?: (text: string) => void;
+  glassesContext?: string;
 }
 type Status = "loading-models" | "requesting-camera" | "ready" | "off" | "no-camera" | "error";
 
@@ -118,7 +119,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   );
 };
 
-export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null, glassesMode = false, onCoachingText }: Props) {
+export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, sessionId, voiceEmotion = null, voiceEmotionScores = null, glassesMode = false, onCoachingText, glassesContext = "general" }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [status, setStatus] = useState<Status>("loading-models");
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion>(null);
@@ -149,10 +150,12 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
   const onSustainedNegativeRef = useRef(onSustainedNegative);
   const onCoachingTextRef = useRef(onCoachingText);
   const glassesActiveRef = useRef(false);
+  const glassesContextRef = useRef(glassesContext);
   const coachingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const toggleGlassesViewRef = useRef<() => Promise<void>>(() => Promise.resolve());
   useEffect(() => { onSustainedNegativeRef.current = onSustainedNegative; }, [onSustainedNegative]);
   useEffect(() => { onCoachingTextRef.current = onCoachingText; }, [onCoachingText]);
+  useEffect(() => { glassesContextRef.current = glassesContext; }, [glassesContext]);
 
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
   useEffect(() => { voiceEmotionRef.current = voiceEmotion; }, [voiceEmotion]);
@@ -311,7 +314,7 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
       const res = await fetch("/api/glasses-coaching", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emotion, confidence: conf }),
+        body: JSON.stringify({ emotion, confidence: conf, context: glassesContextRef.current }),
       });
       const data = await res.json() as { coaching: string | null };
       if (data.coaching && glassesActiveRef.current) {
