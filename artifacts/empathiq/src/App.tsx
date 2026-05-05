@@ -176,12 +176,7 @@ function App() {
           {/* Brand row */}
           <div className="flex items-center justify-between px-5 py-2">
             <a href="/" className="flex items-center gap-2.5 no-underline hover:opacity-80 transition-opacity">
-              <div className="logo-glow w-7 h-7 rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/20 border border-primary/30 flex items-center justify-center">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" className="text-primary">
-                  <path d="M12 20.5c-5.25-4.8-10-9-10-13A5 5 0 0 1 12 4.93 5 5 0 0 1 22 7.5c0 4-4.75 8.2-10 13z" fill="currentColor" opacity="0.85" />
-                  <path d="M9 9c0-1.1.9-2 2-2s2 .9 2 2" stroke="hsl(var(--primary-foreground))" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.6" />
-                </svg>
-              </div>
+              <img src="/logo.png" width="32" height="32" alt="EmpathIQ" style={{ objectFit: 'contain' }} />
               <div className="flex flex-col leading-none">
                 <span className="text-xs font-bold tracking-wide text-foreground">EmpathIQ</span>
                 <span className="text-[8px] text-muted-foreground/60 tracking-widest uppercase mt-0.5">Emotional AI</span>
