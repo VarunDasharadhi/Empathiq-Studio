@@ -422,11 +422,12 @@
     }
     .difference-cards {
       display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 56px;
+      align-items: stretch;
     }
     .diff-card {
       padding: 32px; border-radius: 20px;
       background: var(--card); border: 1px solid var(--border);
-      position: relative; overflow: hidden;
+      position: relative; overflow: hidden; min-height: 180px;
     }
     .diff-card-generic {
       border-color: rgba(255,107,107,0.25);
@@ -494,6 +495,7 @@
       padding: 20px; border-radius: 18px;
       background: var(--card); border: 1px solid var(--border);
       transition: all 0.3s; position: relative; overflow: hidden;
+      min-height: 200px; display: flex; flex-direction: column; justify-content: space-between;
     }
     .feature-card::before {
       content: ''; position: absolute; inset: 0; border-radius: inherit;
@@ -1000,7 +1002,7 @@
     <h2 class="cta-headline reveal">Ready to be truly heard?</h2>
     <p class="cta-sub reveal">No sign-up. No download. Just open it and start talking.</p>
     <div class="cta-buttons reveal">
-      <a class="btn-primary" href="/app" style="padding:14px 36px !important;background:#00C9C9 !important;color:#000000 !important;font-weight:600 !important;border-radius:8px !important;box-shadow:0 0 32px rgba(0,201,201,0.4) !important;">
+      <a class="btn-primary" href="/app" style="padding:16px 40px !important;font-size:16px !important;background:#00C9C9 !important;color:#000000 !important;font-weight:600 !important;border-radius:8px !important;box-shadow:0 0 32px rgba(0,201,201,0.4) !important;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Try EmpathIQ Live
       </a>
