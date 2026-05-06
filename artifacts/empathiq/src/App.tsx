@@ -9,6 +9,22 @@ import SmartGlassesPanel from "@/components/SmartGlassesPanel";
 
 const queryClient = new QueryClient();
 
+export const LANGUAGES = [
+  { code: "EN-GB", flag: "🇬🇧", name: "English (GB)", locale: "en-GB" },
+  { code: "EN-US", flag: "🇺🇸", name: "English (US)", locale: "en-US" },
+  { code: "HI",    flag: "🇮🇳", name: "Hindi",        locale: "hi-IN" },
+  { code: "TA",    flag: "🇮🇳", name: "Tamil",        locale: "ta-IN" },
+  { code: "TE",    flag: "🇮🇳", name: "Telugu",       locale: "te-IN" },
+  { code: "KN",    flag: "🇮🇳", name: "Kannada",      locale: "kn-IN" },
+  { code: "ML",    flag: "🇮🇳", name: "Malayalam",    locale: "ml-IN" },
+  { code: "BN",    flag: "🇮🇳", name: "Bengali",      locale: "bn-IN" },
+  { code: "ES",    flag: "🇪🇸", name: "Spanish",      locale: "es-ES" },
+  { code: "FR",    flag: "🇫🇷", name: "French",       locale: "fr-FR" },
+  { code: "AR",    flag: "🇸🇦", name: "Arabic",       locale: "ar-SA" },
+] as const;
+export type LangCode = typeof LANGUAGES[number]["code"];
+export type Language = typeof LANGUAGES[number];
+
 export type Emotion =
   | "happy" | "sad" | "angry" | "fearful"
   | "disgusted" | "surprised" | "neutral" | null;
@@ -44,6 +60,7 @@ const NAV_TABS: Array<{ id: RightPanel; emoji: string; label: string; color: str
 ];
 
 function App() {
+  const [selectedLang, setSelectedLang] = useState<LangCode>("EN-GB");
   const [appReady, setAppReady] = useState(false);
   const [faceEmotion, setFaceEmotion] = useState<Emotion>(null);
   const [voiceEmotion, setVoiceEmotion] = useState<string | null>(null);
@@ -262,6 +279,8 @@ function App() {
                 onDismissCheckIn={() => setCheckIn(null)}
                 onModeChange={() => {}}
                 onMobileStateChange={setMobilePanelState}
+                selectedLang={selectedLang}
+                onLangChange={setSelectedLang}
               />
             )}
             {rightPanel === "voice" && (
@@ -271,6 +290,8 @@ function App() {
                 sessionId={sessionId}
                 faceEmotionCounts={emotionCountRef.current}
                 onMobileStateChange={setMobilePanelState}
+                selectedLang={selectedLang}
+                onLangChange={setSelectedLang}
               />
             )}
             {rightPanel === "glasses" && (

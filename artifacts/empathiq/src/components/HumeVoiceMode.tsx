@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { VoiceProvider, useVoice, VoiceReadyState, type JSONMessage } from "@humeai/voice-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import ModeDropdown from "@/components/ModeDropdown";
+import LanguageSelector from "@/components/LanguageSelector";
+import { LANGUAGES, type LangCode } from "@/App";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -10,6 +12,8 @@ interface Props {
   sessionId: number | null;
   faceEmotionCounts: Record<string, number>;
   onMobileStateChange?: (state: "balanced" | "maximised" | "minimised") => void;
+  selectedLang: LangCode;
+  onLangChange: (code: LangCode) => void;
 }
 
 interface HumeConfig {
@@ -27,6 +31,8 @@ interface EviInnerProps {
   onVoiceGenderChange: (g: "masculine" | "feminine") => void;
   externalError: string | null;
   onMobileStateChange?: (state: "balanced" | "maximised" | "minimised") => void;
+  selectedLang: LangCode;
+  onLangChange: (code: LangCode) => void;
 }
 
 interface Mode {
@@ -56,14 +62,6 @@ const MODES: Mode[] = [
     systemPrompt: "You are EmpathIQ in Confidence Booster mode, a hyped and honest voice companion. When the person looks low or scared, name it and lift it. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Be warm, convicted, energising. Short punchy sentences. Ask one energising question. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"I have a big presentation tomorrow\" and looks fearful. You say: Look, that nervous energy means you care, and that's exactly what you want. What's the part you're most ready to own tomorrow?" },
 ];
 
-// ── Speech language (for STT accent hint shown in voice panel settings) ─────
-type SpeechLang = "en-GB" | "en-US" | "en-IN" | "en-AU";
-const SPEECH_LANGS: { value: SpeechLang; flag: string; label: string }[] = [
-  { value: "en-GB", flag: "🇬🇧", label: "English (UK)" },
-  { value: "en-US", flag: "🇺🇸", label: "English (US)" },
-  { value: "en-IN", flag: "🇮🇳", label: "English (India)" },
-  { value: "en-AU", flag: "🇦🇺", label: "English (Australia)" },
-];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function topEmotion(scores: Record<string, number>): string | null {
@@ -102,7 +100,7 @@ function SoundWave({ color }: { color: string }) {
 interface TxMsg { id: string; role: "user" | "assistant"; text: string; emotion: string | null; }
 
 // ── Inner component (inside VoiceProvider context) ───────────────────────────
-function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts, voiceGender, onVoiceGenderChange, externalError, onMobileStateChange }: EviInnerProps) {
+function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCounts, voiceGender, onVoiceGenderChange, externalError, onMobileStateChange, selectedLang, onLangChange }: EviInnerProps) {
   const isMobile = useIsMobile();
   const { connect, disconnect, readyState, messages, isMuted, mute, unmute, sendSessionSettings } = useVoice();
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
@@ -135,7 +133,6 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  const [speechLang, setSpeechLang] = useState<SpeechLang>("en-GB");
 
   const [customPrompts, setCustomPrompts] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem("empathiq_prompts") ?? "{}") as Record<string, string>; } catch { return {}; }
@@ -260,8 +257,12 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   // Send custom system prompt via session settings when session becomes live
   useEffect(() => {
     if (readyState === VoiceReadyState.OPEN) {
-      const prompt = customPrompts[activeMode.id] ?? activeMode.systemPrompt;
-      sendSessionSettings({ systemPrompt: prompt });
+      const base = customPrompts[activeMode.id] ?? activeMode.systemPrompt;
+      const lang = LANGUAGES.find((l) => l.code === selectedLang);
+      const langNote = lang
+        ? `\nSpeak and respond only in ${lang.name}. Use natural conversational ${lang.name} as a native speaker would. Do not switch languages mid response.`
+        : "";
+      sendSessionSettings({ systemPrompt: `${base}${langNote}` });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readyState]);
@@ -384,16 +385,7 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
 
         <div className="flex items-center gap-1.5 md:gap-2">
           {/* Language selector */}
-          <select
-            value={speechLang}
-            onChange={(e) => setSpeechLang(e.target.value as SpeechLang)}
-            className="h-7 rounded-lg bg-white/5 border border-white/10 text-muted-foreground text-[10px] px-1.5 focus:outline-none cursor-pointer hover:bg-white/8 transition-colors"
-            title={SPEECH_LANGS.find(l => l.value === speechLang)?.label ?? "Speech language"}
-          >
-            {SPEECH_LANGS.map(l => (
-              <option key={l.value} value={l.value}>{l.flag} {l.label}</option>
-            ))}
-          </select>
+          <LanguageSelector value={selectedLang} onChange={onLangChange} />
 
           {/* Voice gender toggle — locked while session is live */}
           <div className="flex items-center rounded-lg overflow-hidden border border-white/10 text-[10px] font-medium">
@@ -823,7 +815,7 @@ const VOICE_LABELS: Record<VoiceGender, { label: string; subtitle: string; icon:
 };
 
 // ── Outer wrapper ─────────────────────────────────────────────────────────────
-export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: _sessionId, faceEmotionCounts, onMobileStateChange }: Props) {
+export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: _sessionId, faceEmotionCounts, onMobileStateChange, selectedLang, onLangChange }: Props) {
   const [voiceGender, setVoiceGender] = useState<VoiceGender>("feminine");
   const [config, setConfig] = useState<HumeConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -910,6 +902,8 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
         onVoiceGenderChange={setVoiceGender}
         externalError={eviError}
         onMobileStateChange={onMobileStateChange}
+        selectedLang={selectedLang}
+        onLangChange={onLangChange}
       />
     </VoiceProvider>
   );

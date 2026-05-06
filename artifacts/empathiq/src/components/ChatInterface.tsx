@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { Emotion } from "@/App";
+import { LANGUAGES, type LangCode } from "@/App";
 import { useIsMobile } from "@/hooks/use-mobile";
 import ModeDropdown from "@/components/ModeDropdown";
+import LanguageSelector from "@/components/LanguageSelector";
 
 interface Coherence {
   score: number;        // 0–1
@@ -202,13 +204,6 @@ declare global {
   }
 }
 
-type SpeechLang = "en-GB" | "en-US" | "en-IN" | "en-AU";
-const SPEECH_LANGS: { value: SpeechLang; flag: string; label: string }[] = [
-  { value: "en-GB", flag: "🇬🇧", label: "English (UK)" },
-  { value: "en-US", flag: "🇺🇸", label: "English (US)" },
-  { value: "en-IN", flag: "🇮🇳", label: "English (India)" },
-  { value: "en-AU", flag: "🇦🇺", label: "English (Australia)" },
-];
 
 const SoundWave = ({ color }: { color: string }) => (
   <div className="flex items-center gap-[3px] h-5">
@@ -253,11 +248,13 @@ interface Props {
   onDismissCheckIn?: () => void;
   onModeChange?: (modeId: string) => void;
   onMobileStateChange?: (state: "balanced" | "maximised" | "minimised") => void;
+  selectedLang: LangCode;
+  onLangChange: (code: LangCode) => void;
 }
 
 type PanelState = "balanced" | "maximised" | "minimised";
 
-export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDismissCheckIn, onModeChange, onMobileStateChange }: Props) {
+export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDismissCheckIn, onModeChange, onMobileStateChange, selectedLang, onLangChange }: Props) {
   const isMobile = useIsMobile();
   const [activeMode, setActiveMode] = useState<Mode>(MODES[0]);
   const [panelState, setPanelState] = useState<PanelState>("balanced");
@@ -269,7 +266,6 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const [interimIsFinal, setInterimIsFinal] = useState(false);
   const [micFailed, setMicFailed] = useState(false);
   const [lowConfidence, setLowConfidence] = useState(false);
-  const [speechLang, setSpeechLang] = useState<SpeechLang>("en-GB");
   const [emotionFlashKey, setEmotionFlashKey] = useState(0);
   const [currentCoherence, setCurrentCoherence] = useState<Coherence | null>(null);
   const prevEmotionRef = useRef<Emotion>(null);
@@ -290,7 +286,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const interimRef = useRef("");
   const confidenceRef = useRef(0);
   // Always-fresh ref to avoid stale closures in recognition callbacks
-  const startRecordingFnRef = useRef<(lang: SpeechLang) => void>(() => {});
+  const startRecordingFnRef = useRef<(lang: string) => void>(() => {});
 
   // Mode bar scroll
   const modeBarRef = useRef<HTMLDivElement>(null);
@@ -429,7 +425,17 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages, systemPrompt: customPrompts[activeMode.id] ?? activeMode.systemPrompt }),
+        body: JSON.stringify({
+          messages: apiMessages,
+          systemPrompt: (() => {
+            const base = customPrompts[activeMode.id] ?? activeMode.systemPrompt;
+            const lang = LANGUAGES.find((l) => l.code === selectedLang);
+            const langNote = lang
+              ? `\nAlways respond in ${lang.name}. Use natural conversational ${lang.name} as a native speaker would. Do not switch languages mid response.`
+              : "";
+            return `${base}${langNote}`;
+          })(),
+        }),
         signal: controller.signal,
       }).finally(() => clearTimeout(timeout));
 
@@ -446,13 +452,13 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       setIsTyping(false);
       inputRef.current?.focus();
     }
-  }, [input, isTyping, messages, currentEmotion, sessionId, activeMode]);
+  }, [input, isTyping, messages, currentEmotion, sessionId, activeMode, selectedLang, customPrompts]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const startRecording = useCallback((lang: SpeechLang) => {
+  const startRecording = useCallback((lang: string) => {
     if (!speechSupported || isRecording) return;
     const SR = window.webkitSpeechRecognition ?? window.SpeechRecognition;
     const rec = new SR();
@@ -563,8 +569,9 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   }, []);
 
   const toggleRecording = useCallback(() => {
-    if (isRecording) { stopRecording(); } else { startRecording(speechLang); }
-  }, [isRecording, stopRecording, startRecording, speechLang]);
+    const locale = LANGUAGES.find((l) => l.code === selectedLang)?.locale ?? "en-GB";
+    if (isRecording) { stopRecording(); } else { startRecording(locale); }
+  }, [isRecording, stopRecording, startRecording, selectedLang]);
 
   // Keep scroll indicators in sync
   const updateScrollState = useCallback(() => {
@@ -654,6 +661,19 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
           )}
         </div>
         <div className="flex items-center gap-1.5 md:gap-2">
+          {/* Language selector */}
+          {panelState !== "minimised" && (
+            <LanguageSelector value={selectedLang} onChange={onLangChange} />
+          )}
+          {/* Language badge — always visible in header */}
+          {panelState === "minimised" && (() => {
+            const lang = LANGUAGES.find((l) => l.code === selectedLang);
+            return lang ? (
+              <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-white/5 border border-white/8 font-mono">
+                {lang.flag} {lang.code}
+              </span>
+            ) : null;
+          })()}
           {/* Coherence indicator — hide when minimised */}
           {panelState !== "minimised" && displayCoherence && currentEmotion && (
             <CoherenceRing
@@ -843,7 +863,10 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       </div>}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin px-3 py-3 md:px-5 md:py-4 space-y-3 md:space-y-4">
+      <div
+        className="flex-1 overflow-y-auto scrollbar-thin px-3 py-3 md:px-5 md:py-4 space-y-3 md:space-y-4"
+        dir={selectedLang === "AR" ? "rtl" : "ltr"}
+      >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 pb-8">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
@@ -1033,7 +1056,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
               {/* Retry button shown when mic failed */}
               {micFailed && !isRecording && !lowConfidence && (
                 <button
-                  onClick={() => { setMicFailed(false); startRecording(speechLang); }}
+                  onClick={() => { setMicFailed(false); startRecording(LANGUAGES.find((l) => l.code === selectedLang)?.locale ?? "en-GB"); }}
                   disabled={isTyping}
                   title="Try again"
                   className="flex-none w-11 h-11 rounded-xl flex items-center justify-center transition-all bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 cursor-pointer"
