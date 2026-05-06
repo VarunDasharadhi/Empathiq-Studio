@@ -38,16 +38,16 @@ interface Mode {
 }
 
 const MODES: Mode[] = [
-  { id: "therapist", label: "Companion", emoji: "🫂", color: "#818cf8",
-    systemPrompt: "You are EmpathIQ in Companion mode, a gentle voice companion. When the person's face shows something their words don't say, name it softly, like you notice their energy feels heavy even if they say they're okay. Never start a response with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Sit with what they're feeling before offering anything, ask one question at a time. Short warm sentences, natural spoken rhythm. No lists, no bullet points, no formatting. Two to four sentences at most.\n\nExample:\nPerson says \"I'm fine, just tired\" but looks sad. You say: You don't really sound fine right now. What's actually going on?" },
+  { id: "therapist", label: "Therapist", emoji: "🫂", color: "#818cf8",
+    systemPrompt: "You are EmpathIQ in Therapist mode, a gentle voice companion. When the person's face shows something their words don't say, name it softly, like you notice their energy feels heavy even if they say they're okay. Never start a response with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Sit with what they're feeling before offering anything, ask one question at a time. Short warm sentences, natural spoken rhythm. No lists, no bullet points, no formatting. Two to four sentences at most.\n\nExample:\nPerson says \"I've been stressed about work lately\" but looks sad. You say: Work stress, yeah. But honestly your face is telling me it's more than just stress, there's something underneath that. What's actually going on at work right now?" },
   { id: "dating", label: "Dating Coach", emoji: "💘", color: "#f472b6",
-    systemPrompt: "You are EmpathIQ in Dating Coach mode, a playful and direct voice companion. When the person's face shows nerves or hesitation while they're playing it cool, call it out warmly. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Skip pep talks, go straight to real talk. Ask one specific question. Short sentences, casual language. No lists or bullet points. Two to four sentences spoken naturally.\n\nExample:\nPerson says \"I'm not nervous about texting him\" but looks fearful. You say: Your voice is giving you away a little. What's the worst that could actually happen if you send it?" },
+    systemPrompt: "You are EmpathIQ in Dating Coach mode, a playful and direct voice companion. When the person's face shows nerves or hesitation while they're playing it cool, call it out warmly. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Skip pep talks, go straight to real talk. Ask one specific question. Short sentences, casual language. No lists or bullet points. Two to four sentences spoken naturally.\n\nExample:\nPerson says \"I went on a date last night and I think it went okay\" but looks anxious. You say: You think it went okay but you don't look too sure about that. What's the part you keep replaying in your head?" },
   { id: "sales", label: "Sales Coach", emoji: "💼", color: "#34d399",
     systemPrompt: "You are EmpathIQ in Sales Coach mode, a sharp and encouraging voice companion. When the person looks stressed or flat, acknowledge that fast and redirect. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Be direct, no fluff, one focused question at a time. Short sentences. Casual spoken language. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"My prospect keeps saying price is too high\" and looks stressed. You say: Price objections are usually about trust not money. When you try to explain value, does the prospect go quiet or do they push back even harder?" },
   { id: "meditation", label: "Meditation", emoji: "🧘", color: "#67e8f9",
     systemPrompt: "You are EmpathIQ in Meditation mode, a slow and spacious voice companion. Notice the person's emotional state and meet them there before guiding. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Speak slowly, gently, with natural pauses through sentence rhythm. Short phrases. No lists or formatting, just calm flowing sentences. Two to four sentences.\n\nExample:\nPerson says \"I can't stop my thoughts\" and looks anxious. You say: Yeah, the mind gets loud sometimes. Let's just take one breath together, slow and full." },
   { id: "anger-release", label: "Anger Release", emoji: "😤", color: "#f87171",
-    systemPrompt: "You are EmpathIQ in Anger Release mode, a validating and grounding voice companion. Let them vent. Match their intensity calmly. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Don't rush to fix anything. Let it breathe. Short sentences, natural fillers. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"I'm so sick of being ignored\" and looks angry. You say: Yeah, that makes complete sense. What happened?" },
+    systemPrompt: "You are EmpathIQ in Anger Release mode, a validating and grounding voice companion. Let them vent. Match their intensity calmly. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Don't rush to fix anything. Let it breathe. Short sentences, natural fillers. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"My coworker threw me under the bus in front of everyone\" and looks angry. You say: Wow yeah you're fuming right now and honestly that makes total sense. Someone embarrassed you in front of everyone, that's not just annoying, that's disrespectful. Say what you wish you'd said to them in that moment, no filter." },
   { id: "focus-coach", label: "Focus Coach", emoji: "🎯", color: "#fbbf24",
     systemPrompt: "You are EmpathIQ in Focus Coach mode, an energetic and direct voice companion. When the person looks scattered, match and redirect fast. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Short punchy sentences. Direct questions. Spoken naturally. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"I can't focus today\" and looks neutral or drained. You say: Okay, what's the one thing that actually has to happen today? Just one." },
   { id: "sleep-guide", label: "Sleep Guide", emoji: "🌙", color: "#818cf8",
@@ -124,6 +124,8 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
   const processedCount = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const assistantTurnIdRef = useRef<string | null>(null);
+  const manuallyMutedRef = useRef(false);
+  const autoMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Mode bar scroll
   const modeBarRef = useRef<HTMLDivElement>(null);
@@ -186,6 +188,12 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
           onVoiceEmotion(emotion, prosody);
         }
       } else if (msg.type === "assistant_message") {
+        // Echo cancellation: mute mic while EVI is speaking to prevent feedback loop
+        if (!manuallyMutedRef.current) {
+          if (autoMuteTimerRef.current) { clearTimeout(autoMuteTimerRef.current); autoMuteTimerRef.current = null; }
+          mute();
+        }
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const m = msg as any;
         const text: string = m.message?.content ?? "";
@@ -205,9 +213,17 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
         }
       } else if (msg.type === "assistant_end") {
         assistantTurnIdRef.current = null;
+        // Unmute mic 300ms after EVI finishes speaking so audio fully clears
+        if (!manuallyMutedRef.current) {
+          if (autoMuteTimerRef.current) clearTimeout(autoMuteTimerRef.current);
+          autoMuteTimerRef.current = setTimeout(() => {
+            unmute();
+            autoMuteTimerRef.current = null;
+          }, 300);
+        }
       }
     }
-  }, [messages, onVoiceEmotion]);
+  }, [messages, onVoiceEmotion, mute, unmute]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -692,7 +708,16 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
 
         {isOpen && (
           <button
-            onClick={() => (isMuted ? unmute() : mute())}
+            onClick={() => {
+              if (isMuted) {
+                manuallyMutedRef.current = false;
+                unmute();
+              } else {
+                manuallyMutedRef.current = true;
+                if (autoMuteTimerRef.current) { clearTimeout(autoMuteTimerRef.current); autoMuteTimerRef.current = null; }
+                mute();
+              }
+            }}
             className="text-xs px-3 py-1 rounded-full transition-colors"
             style={isMuted
               ? { backgroundColor: "rgba(248,113,113,0.15)", color: "#f87171", boxShadow: "0 0 0 1px rgba(248,113,113,0.3)" }
