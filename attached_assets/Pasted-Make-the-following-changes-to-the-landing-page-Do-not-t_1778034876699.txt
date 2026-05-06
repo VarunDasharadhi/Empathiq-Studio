@@ -1,0 +1,26 @@
+Make the following changes to the landing page. Do not touch layout, fonts, or colours unless specifically stated.
+1. Add a social proof bar between the hero stat badges and the CTA button.
+Insert a thin horizontal strip with a slightly lighter background than the page, sitting just below the three stat badges. It should contain two items side by side, centred, separated by a vertical divider line:
+
+"What a beautiful idea!" — Gyuree, Replit community
+"50+ demo views in 48 hours"
+Style each item in small muted text, around 13px, with the quote in italic. The divider should be very subtle, 1px, low opacity teal. On mobile, stack them vertically with a small gap instead.
+
+2. Add one market context sentence to the Vision section.
+Below the "The AI that speaks for those who can't" headline and before the who-it's-for icons, add this line in muted text centred on the page:
+"Over 1 billion people worldwide struggle to communicate how they truly feel. EmpathIQ is built for every single one of them."
+3. Rewrite the feature card descriptions in the "Everything your mental state needs" section.
+Keep the card titles exactly the same. Only update the description text inside each card:
+
+Coherence Score: "See the gap between what your face shows and what your words say, in real time."
+Emotional Arc: "Watch how your emotional state shifts across the entire conversation, not just moment to moment."
+Proactive Check-ins: "EmpathIQ notices when your mood drops and checks in on you, before you even ask."
+Speaker History: "Track how your emotional patterns evolve over multiple sessions and spot what triggers you."
+Smart Glasses Coach: "Point the outward camera at anyone around you and get live emotional coaching on how they are really feeling."
+Call Voice Mode: "Talk out loud and EmpathIQ responds with a human-like voice that matches the emotional weight of what you said."
+
+4. Fix the CTA hierarchy at the bottom of the page.
+Make the primary button "Try EmpathIQ Live" visually dominant. Increase its padding to 14px 32px, background solid teal #00C9C9, text black, font-weight 600. Keep "View on Buildathon" as a ghost outline button at current size. They should not look equal.
+5. Add a social proof line just above the final CTA section.
+A single centred line that reads: "Favorited by 15+ builders in the Replit community" with a small heart icon before it, in muted teal text, 13px. This goes above the "Ready to be truly heard?" heading.
+Do not change anything else on the page.
