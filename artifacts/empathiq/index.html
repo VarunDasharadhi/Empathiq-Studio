@@ -284,14 +284,14 @@
     }
     .stat-badge {
       display: inline-flex; align-items: center; gap: 7px;
-      padding: 8px 20px; border-radius: 100px;
-      background: rgba(45,212,191,0.18);
+      padding: 10px 20px; border-radius: 100px;
+      background: rgba(45,212,191,0.2);
       border: 1px solid rgba(45,212,191,0.4);
-      font-size: 0.85rem; font-weight: 500; color: #fff;
+      font-size: 0.9rem; font-weight: 500; color: #fff;
       transition: all 0.25s;
     }
     .stat-badge:hover {
-      background: rgba(45,212,191,0.18);
+      background: rgba(45,212,191,0.28);
       border-color: rgba(45,212,191,0.5);
       transform: translateY(-2px);
     }
@@ -605,7 +605,7 @@
 
     /* ── FOOTER ── */
     footer {
-      border-top: 1px solid rgba(45,212,191,0.1); padding: 28px 40px;
+      border-top: 1px solid rgba(45,212,191,0.1); padding: 60px 40px;
       display: flex; align-items: center; justify-content: space-between;
       font-size: 12px; color: var(--muted);
     }
@@ -637,7 +637,7 @@
       footer { flex-direction: column; gap: 8px; text-align: center; }
       .live-counter { display: none; }
       .hero-stat-badges { gap: 8px; }
-      .stat-badge { font-size: 12px; padding: 7px 13px; }
+      .stat-badge { font-size: 0.82rem; padding: 8px 14px; }
     }
   </style>
 </head>
@@ -734,43 +734,6 @@
     </a>
   </div>
 
-  <div id="demoThumb" onclick="openVideoModal()"
-     style="cursor:pointer; display:block; max-width:800px; width:100%; margin:2rem auto 0; border-radius:16px; overflow:hidden; box-shadow:0 0 40px rgba(0,200,200,0.15); position:relative; z-index:1; aspect-ratio:16/9; background:linear-gradient(135deg,#0d0a1a 0%,#1a0d2e 40%,#0a1a1a 100%); transition:transform 0.2s, box-shadow 0.2s;"
-     onmouseenter="this.style.transform='scale(1.01)';this.style.boxShadow='0 0 60px rgba(0,200,200,0.25)'"
-     onmouseleave="this.style.transform='scale(1)';this.style.boxShadow='0 0 40px rgba(0,200,200,0.15)'">
-    <img
-      src="https://img.youtube.com/vi/GNxleo1goMI/maxresdefault.jpg"
-      alt="EmpathIQ Demo"
-      style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0.85;"
-      onerror="this.style.display='none'"
-    />
-    <div style="position:absolute; inset:0; background-image:linear-gradient(rgba(139,92,246,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(139,92,246,0.07) 1px,transparent 1px); background-size:40px 40px; pointer-events:none;"></div>
-    <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;">
-      <div style="width:80px; height:80px; border-radius:50%; background:rgba(139,92,246,0.9); display:flex; align-items:center; justify-content:center; box-shadow:0 0 40px rgba(139,92,246,0.7);">
-        <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      </div>
-      <div style="text-align:center;">
-        <div style="color:#fff; font-size:16px; font-weight:600; margin-bottom:4px;">Watch EmpathIQ Demo</div>
-        <div style="color:rgba(255,255,255,0.5); font-size:12px;">Click to play</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Video Lightbox -->
-  <div id="videoModal" onclick="closeVideoModal()" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.88); backdrop-filter:blur(12px); align-items:center; justify-content:center; padding:24px;">
-    <div onclick="event.stopPropagation()" style="position:relative; width:100%; max-width:900px; aspect-ratio:16/9; border-radius:16px; overflow:hidden; box-shadow:0 0 80px rgba(139,92,246,0.3);">
-      <iframe
-        id="demoIframe"
-        src=""
-        title="EmpathIQ Demo"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-        allowfullscreen
-        style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;">
-      </iframe>
-    </div>
-    <button onclick="closeVideoModal()" style="position:fixed; top:20px; right:24px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; width:40px; height:40px; border-radius:50%; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(8px);">✕</button>
-  </div>
 </section>
 
 <!-- ── PROBLEM ── -->
@@ -872,6 +835,50 @@
     </div>
   </div>
 </section>
+
+<!-- ── VIDEO ── -->
+<section id="demo" style="padding:100px 0 80px;">
+  <div class="container" style="text-align:center;">
+    <h2 class="section-headline reveal" style="background:none;-webkit-text-fill-color:var(--teal);color:var(--teal);margin-bottom:40px;">See it in action.</h2>
+    <div id="demoThumb" onclick="openVideoModal()"
+       style="cursor:pointer; display:block; max-width:800px; width:100%; margin:0 auto; border-radius:16px; overflow:hidden; box-shadow:0 0 40px rgba(0,200,200,0.15); position:relative; aspect-ratio:16/9; background:linear-gradient(135deg,#0d0a1a 0%,#1a0d2e 40%,#0a1a1a 100%); transition:transform 0.2s, box-shadow 0.2s;"
+       onmouseenter="this.style.transform='scale(1.01)';this.style.boxShadow='0 0 60px rgba(0,200,200,0.25)'"
+       onmouseleave="this.style.transform='scale(1)';this.style.boxShadow='0 0 40px rgba(0,200,200,0.15)'">
+      <img
+        src="https://img.youtube.com/vi/GNxleo1goMI/maxresdefault.jpg"
+        alt="EmpathIQ Demo"
+        style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0.85;"
+        onerror="this.style.display='none'"
+      />
+      <div style="position:absolute; inset:0; background-image:linear-gradient(rgba(139,92,246,0.07) 1px,transparent 1px),linear-gradient(90deg,rgba(139,92,246,0.07) 1px,transparent 1px); background-size:40px 40px; pointer-events:none;"></div>
+      <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px;">
+        <div style="width:80px; height:80px; border-radius:50%; background:rgba(139,92,246,0.9); display:flex; align-items:center; justify-content:center; box-shadow:0 0 40px rgba(139,92,246,0.7);">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+        <div style="text-align:center;">
+          <div style="color:#fff; font-size:16px; font-weight:600; margin-bottom:4px;">Watch EmpathIQ Demo</div>
+          <div style="color:rgba(255,255,255,0.5); font-size:12px;">Click to play</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Video Lightbox -->
+<div id="videoModal" onclick="closeVideoModal()" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.88); backdrop-filter:blur(12px); align-items:center; justify-content:center; padding:24px;">
+  <div onclick="event.stopPropagation()" style="position:relative; width:100%; max-width:900px; aspect-ratio:16/9; border-radius:16px; overflow:hidden; box-shadow:0 0 80px rgba(139,92,246,0.3);">
+    <iframe
+      id="demoIframe"
+      src=""
+      title="EmpathIQ Demo"
+      frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+      allowfullscreen
+      style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;">
+    </iframe>
+  </div>
+  <button onclick="closeVideoModal()" style="position:fixed; top:20px; right:24px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; width:40px; height:40px; border-radius:50%; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(8px);">✕</button>
+</div>
 
 <!-- ── FEATURES ── -->
 <section id="features">
