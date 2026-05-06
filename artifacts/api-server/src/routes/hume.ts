@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import Anthropic from "@anthropic-ai/sdk";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -76,7 +77,7 @@ async function getOrCreateEviConfig(
     return null;
   } catch (err) {
     // Log but don't crash — caller will return null configId
-    console.error("getOrCreateEviConfig error:", err);
+    logger.error({ err }, "getOrCreateEviConfig error");
     return null;
   }
 }
