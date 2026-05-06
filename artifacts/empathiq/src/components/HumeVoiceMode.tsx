@@ -4,6 +4,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import ModeDropdown from "@/components/ModeDropdown";
 import LanguageSelector from "@/components/LanguageSelector";
 import { LANGUAGES, type LangCode } from "@/App";
+import SarvamVoiceMode from "@/components/SarvamVoiceMode";
+
+// Indian language codes that switch from EVI → Sarvam AI
+const INDIAN_LANG_CODES = new Set<LangCode>(["HI", "TA", "TE", "KN", "ML", "BN"]);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -838,8 +842,14 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
   const [loading, setLoading] = useState(true);
   const [eviError, setEviError] = useState<string | null>(null);
 
-  // Re-fetch config whenever voice gender changes
+  const isIndian = INDIAN_LANG_CODES.has(selectedLang);
+
+  // Re-fetch config whenever voice gender changes (skipped for Indian langs)
   useEffect(() => {
+    if (isIndian) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -857,7 +867,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
       .catch(() => { if (!cancelled) setError("Could not reach the server."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [voiceGender]);
+  }, [voiceGender, isIndian]);
 
   // Raw message handler — runs before the SDK builds its messages array,
   // so models.prosody.scores is still intact here.
@@ -873,6 +883,19 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
       }
     }
   }, [onVoiceEmotion]);
+
+  // ── Sarvam fast-path: all hooks above must run unconditionally first ───────
+  if (isIndian) {
+    return (
+      <SarvamVoiceMode
+        selectedLang={selectedLang}
+        onLangChange={onLangChange}
+        voiceGender={voiceGender}
+        onVoiceGenderChange={setVoiceGender}
+        onMobileStateChange={onMobileStateChange}
+      />
+    );
+  }
 
   if (loading) {
     return (
