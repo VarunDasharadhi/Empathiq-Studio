@@ -853,7 +853,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
             <div>
               <p className="text-sm font-semibold text-foreground">{activeMode.label} ready</p>
               <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">
-                EmpathIQ reads your face and words together — detecting emotional coherence in real time
+                EmpathIQ reads your face and words together, detecting emotional coherence in real time
               </p>
             </div>
             <div className="grid grid-cols-1 gap-2 w-full max-w-[280px]">

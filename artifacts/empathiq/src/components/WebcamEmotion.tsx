@@ -544,19 +544,19 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
               </>
             )}
             {status === "off" && (
-              <>
-                <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-muted-foreground">
+              <div className="flex flex-col items-center justify-center gap-4 max-[768px]:gap-2 max-[768px]:max-h-[120px] max-[768px]:overflow-hidden w-full">
+                <div className="w-14 h-14 max-[768px]:w-9 max-[768px]:h-9 rounded-2xl bg-muted flex items-center justify-center flex-shrink-0">
+                  <svg className="w-7 h-7 max-[768px]:w-[18px] max-[768px]:h-[18px] text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                     <path d="M23 7l-7 5 7 5V7z" />
                     <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
                     <line x1="2" y1="2" x2="22" y2="22" />
                   </svg>
                 </div>
-                <div className="text-center px-6">
-                  <p className="text-sm font-medium text-foreground">
+                <div className="text-center px-6 max-[768px]:px-3">
+                  <p className="text-sm max-[768px]:text-[0.9rem] font-medium text-foreground">
                     {glassesMode ? "Point camera at someone to begin" : "Camera is off"}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs max-[768px]:text-[0.7rem] text-muted-foreground mt-1">
                     {glassesMode
                       ? "Turn camera on, then switch to Glasses View to read their emotions"
                       : "Click \"On\" to start emotion detection"}
@@ -564,11 +564,11 @@ export default function WebcamEmotion({ onEmotionChange, onSustainedNegative, se
                 </div>
                 <button
                   onClick={toggleCamera}
-                  className="mt-1 px-4 py-2 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors cursor-pointer"
+                  className="mt-1 px-4 py-2 max-[768px]:py-0 max-[768px]:h-8 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors cursor-pointer"
                 >
                   Turn camera on
                 </button>
-              </>
+              </div>
             )}
             {status === "no-camera" && (
               <>
