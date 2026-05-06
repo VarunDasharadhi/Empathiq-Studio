@@ -80,22 +80,14 @@
     overflow: hidden;
   }
 
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-family: var(--app-font-sans);
+  html {
+    background: hsl(222 20% 8%) url('/hero-bg.png') center / cover fixed;
   }
 
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: url('/hero-bg.png');
-    background-size: cover;
-    background-attachment: fixed;
-    background-position: center;
-    opacity: 0.08;
-    z-index: -1;
-    pointer-events: none;
+  body {
+    @apply text-foreground antialiased;
+    font-family: var(--app-font-sans);
+    background: transparent;
   }
 }
 
@@ -144,11 +136,11 @@
 .app-gradient-bg {
   background: linear-gradient(
     135deg,
-    hsl(240 25% 7%),
-    hsl(255 30% 9%),
-    hsl(220 28% 8%),
-    hsl(270 25% 7%),
-    hsl(235 30% 9%)
+    hsl(240 25% 7% / 0.93),
+    hsl(255 30% 9% / 0.93),
+    hsl(220 28% 8% / 0.93),
+    hsl(270 25% 7% / 0.93),
+    hsl(235 30% 9% / 0.93)
   );
   background-size: 400% 400%;
   animation: gradientDrift 18s ease infinite;

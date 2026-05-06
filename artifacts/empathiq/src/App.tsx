@@ -176,7 +176,7 @@ function App() {
           {/* Brand row */}
           <div className="flex items-center justify-between px-5 py-2">
             <a href="/" className="flex items-center gap-2.5 no-underline hover:opacity-80 transition-opacity">
-              <img src="/logo.png" width="32" height="32" alt="EmpathIQ" style={{ objectFit: 'contain' }} />
+              <img src="/logo.png" width="32" height="32" alt="EmpathIQ" style={{ objectFit: 'contain', mixBlendMode: 'lighten', borderRadius: '50%', background: 'transparent' }} />
               <div className="flex flex-col leading-none">
                 <span className="text-xs font-bold tracking-wide text-foreground">EmpathIQ</span>
                 <span className="text-[8px] text-muted-foreground/60 tracking-widest uppercase mt-0.5">Emotional AI</span>
