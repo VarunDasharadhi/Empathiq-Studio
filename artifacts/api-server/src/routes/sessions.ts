@@ -294,6 +294,12 @@ router.post("/sessions/:id/messages", (req, res) => {
     return;
   }
 
+  // Reset startedAt to the first real message so duration reflects
+  // conversation time, not idle time since page load
+  if (session.messageCount === 0) {
+    session.startedAt = new Date().toISOString();
+  }
+
   const msg: SessionMessage = {
     id: nextId++,
     sessionId,
