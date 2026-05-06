@@ -1,0 +1,18 @@
+Make these final improvements to the landing page:
+1. Hero background texture
+Upload the neural network image as public/hero-bg.png and set it as the background of the hero section. Add it as a CSS background-image with cover sizing, fixed attachment, and 15% opacity so it sits behind the content without overpowering it. The existing gradient should layer on top of it.
+2. Hero headline fix
+The typewriter headline currently shows "Most" which is clearly a bug. Replace it with this single static headline in two lines: "Your face says sad." on line one, "Your words say fine." on line two, then "This AI catches the difference." as the third line highlighted in teal. Remove the typewriter animation entirely and just show this as a bold static headline. It is more powerful without the typing gimmick.
+3. Stat badges
+Below the hero subheading and above the CTA buttons, add three small horizontal stat badges: "7 Emotions Detected", "200ms Response", "8 Coaching Modes". Style as pill shaped badges with semi transparent teal background, white text, small font size, and a subtle teal border.
+4. Detecting emotion chip
+Make the DETECTING chip in the hero cycle through these emotions every 3 seconds with a smooth fade transition: 😊 Joy, 😔 Sadness, 😰 Anxiety, 😤 Frustration, 😌 Calm. It should never stop cycling.
+5. Coral accent colour
+Add coral #FF6B6B as a secondary accent colour. Use it on the "The Gap" section label, the before/after section label, the vision quote highlight on "those who can't", and any hover states on secondary buttons. Do not overuse it, just those specific spots.
+6. Who it's for cards
+In the vision section below the four existing bullet points, add four small cards in a horizontal row: "Non-verbal children" with emoji 🧒, "Elderly care" with emoji 👴, "Mental health access" with emoji 🧠, "Anyone feeling misunderstood" with emoji 💙. Style as compact dark cards with a faint teal border, large emoji above the text, and small centred label below. Stack to two columns on mobile.
+7. Footer
+Add the logo image at 24x24px before the EmpathIQ text in the footer. Add a subtle top border in teal at 10% opacity above the footer.
+8. Smooth scroll
+Add scroll-behavior: smooth to the html element so all anchor links scroll smoothly.
+Do not change any existing sections, layout, or the YouTube embed. Only apply these additions and fixes.
