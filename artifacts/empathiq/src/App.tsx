@@ -10,17 +10,14 @@ import SmartGlassesPanel from "@/components/SmartGlassesPanel";
 const queryClient = new QueryClient();
 
 export const LANGUAGES = [
-  { code: "EN-GB", flag: "🇬🇧", name: "English (GB)", locale: "en-GB" },
-  { code: "EN-US", flag: "🇺🇸", name: "English (US)", locale: "en-US" },
-  { code: "HI",    flag: "🇮🇳", name: "Hindi",        locale: "hi-IN" },
-  { code: "TA",    flag: "🇮🇳", name: "Tamil",        locale: "ta-IN" },
-  { code: "TE",    flag: "🇮🇳", name: "Telugu",       locale: "te-IN" },
-  { code: "KN",    flag: "🇮🇳", name: "Kannada",      locale: "kn-IN" },
-  { code: "ML",    flag: "🇮🇳", name: "Malayalam",    locale: "ml-IN" },
-  { code: "BN",    flag: "🇮🇳", name: "Bengali",      locale: "bn-IN" },
-  { code: "ES",    flag: "🇪🇸", name: "Spanish",      locale: "es-ES" },
-  { code: "FR",    flag: "🇫🇷", name: "French",       locale: "fr-FR" },
-  { code: "AR",    flag: "🇸🇦", name: "Arabic",       locale: "ar-SA" },
+  { code: "EN-GB", flag: "🇬🇧", name: "English (GB)",  locale: "en-GB" },
+  { code: "EN-US", flag: "🇺🇸", name: "English (US)",  locale: "en-US" },
+  { code: "ES",    flag: "🇪🇸", name: "Spanish",       locale: "es-ES" },
+  { code: "FR",    flag: "🇫🇷", name: "French",        locale: "fr-FR" },
+  { code: "DE",    flag: "🇩🇪", name: "German",        locale: "de-DE" },
+  { code: "PT",    flag: "🇵🇹", name: "Portuguese",    locale: "pt-PT" },
+  { code: "JA",    flag: "🇯🇵", name: "Japanese",      locale: "ja-JP" },
+  { code: "KO",    flag: "🇰🇷", name: "Korean",        locale: "ko-KR" },
 ] as const;
 export type LangCode = typeof LANGUAGES[number]["code"];
 export type Language = typeof LANGUAGES[number];

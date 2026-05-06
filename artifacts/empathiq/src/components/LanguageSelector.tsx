@@ -52,7 +52,7 @@ export default function LanguageSelector({ value, onChange }: Props) {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-white/10 shadow-2xl overflow-hidden z-50 py-1"
+          className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-white/10 shadow-2xl overflow-hidden z-50 py-1"
           style={{ backgroundColor: "#0d0d12" }}
         >
           {LANGUAGES.map((lang) => {
@@ -78,6 +78,16 @@ export default function LanguageSelector({ value, onChange }: Props) {
               </button>
             );
           })}
+
+          {/* Divider */}
+          <div className="mx-3 my-1 border-t border-white/6" />
+
+          {/* Coming soon */}
+          <div className="flex items-center gap-2.5 px-3 py-1.5 text-[11px] cursor-default select-none opacity-45">
+            <span className="text-sm leading-none">🇮🇳</span>
+            <span className="flex-1 text-muted-foreground">Indian languages</span>
+            <span className="text-[9px] text-muted-foreground/70 bg-white/5 rounded px-1 py-0.5">soon</span>
+          </div>
         </div>
       )}
     </div>

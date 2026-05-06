@@ -889,7 +889,7 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       {/* Messages */}
       <div
         className="flex-1 overflow-y-auto scrollbar-thin px-3 py-3 md:px-5 md:py-4 space-y-3 md:space-y-4"
-        dir={selectedLang === "AR" ? "rtl" : "ltr"}
+        dir="ltr"
       >
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center gap-4 pb-8">

@@ -4,10 +4,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import ModeDropdown from "@/components/ModeDropdown";
 import LanguageSelector from "@/components/LanguageSelector";
 import { LANGUAGES, type LangCode } from "@/App";
-import SarvamVoiceMode from "@/components/SarvamVoiceMode";
-
-// Indian language codes that switch from EVI → Sarvam AI
-const INDIAN_LANG_CODES = new Set<LangCode>(["HI", "TA", "TE", "KN", "ML", "BN"]);
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -266,7 +262,7 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
       const base = customPrompts[activeMode.id] ?? activeMode.systemPrompt;
       const lang = LANGUAGES.find((l) => l.code === selectedLang);
       const langNote = lang
-        ? `\nSpeak and respond only in ${lang.name}. Use natural conversational ${lang.name} as a native speaker would. Do not switch languages mid response.`
+        ? `\nRespond only in ${lang.name}. Speak naturally as a native speaker would.`
         : "";
       sendSessionSettings({ systemPrompt: `${base}${langNote}` });
     }
@@ -380,23 +376,24 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
       style={isRoast ? { boxShadow: "inset 0 0 0 1.5px rgba(249,115,22,0.45), inset 0 0 60px rgba(249,115,22,0.06)" } : undefined}
     >
       {/* ── Header ── */}
-      <div className="flex-none flex items-center justify-between px-3 py-2 md:px-4 md:py-2.5 border-b border-white/8 bg-black/20">
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col">
-            <p className="text-xs font-semibold text-foreground">EVI Voice Mode</p>
-            {panelState !== "minimised" && <p className="text-[10px] text-muted-foreground hidden sm:block">Hume EVI · Claude Haiku 4.5</p>}
-          </div>
-          {isMobile && panelState === "minimised" && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
-              style={{ backgroundColor: `${activeMode.color}18`, color: activeMode.color, boxShadow: `0 0 0 1px ${activeMode.color}30` }}>
-              {activeMode.emoji} {activeMode.label}
+      <div className="flex-none border-b border-white/8 bg-black/20">
+        <div className="flex items-center justify-between px-3 py-2 md:px-4 md:py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="flex flex-col">
+              <p className="text-xs font-semibold text-foreground">EVI Voice Mode</p>
+              {panelState !== "minimised" && <p className="text-[10px] text-muted-foreground hidden sm:block">Hume EVI 3 · Claude Haiku 4.5</p>}
             </div>
-          )}
-        </div>
+            {isMobile && panelState === "minimised" && (
+              <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                style={{ backgroundColor: `${activeMode.color}18`, color: activeMode.color, boxShadow: `0 0 0 1px ${activeMode.color}30` }}>
+                {activeMode.emoji} {activeMode.label}
+              </div>
+            )}
+          </div>
 
-        <div className="flex items-center gap-1.5 md:gap-2">
-          {/* Language selector */}
-          <LanguageSelector value={selectedLang} onChange={onLangChange} />
+          <div className="flex items-center gap-1.5 md:gap-2">
+            {/* Language selector */}
+            <LanguageSelector value={selectedLang} onChange={onLangChange} />
 
           {/* Voice gender toggle — locked while session is live */}
           <div className="flex items-center rounded-lg overflow-hidden border border-white/10 text-[10px] font-medium">
@@ -453,6 +450,11 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
             </button>
           )}
         </div>
+        </div>
+        {/* Voice language note */}
+        <p className="text-[9px] text-muted-foreground/45 text-right px-3 pb-1.5 hidden sm:block">
+          Voice language powered by Hume EVI 3
+        </p>
       </div>
 
       {/* Content body — clips during parent flex-grow collapse animation */}
@@ -842,14 +844,8 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
   const [loading, setLoading] = useState(true);
   const [eviError, setEviError] = useState<string | null>(null);
 
-  const isIndian = INDIAN_LANG_CODES.has(selectedLang);
-
-  // Re-fetch config whenever voice gender changes (skipped for Indian langs)
+  // Re-fetch config whenever voice gender changes
   useEffect(() => {
-    if (isIndian) {
-      setLoading(false);
-      return;
-    }
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -867,7 +863,7 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
       .catch(() => { if (!cancelled) setError("Could not reach the server."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [voiceGender, isIndian]);
+  }, [voiceGender]);
 
   // Raw message handler — runs before the SDK builds its messages array,
   // so models.prosody.scores is still intact here.
@@ -883,19 +879,6 @@ export default function HumeVoiceMode({ onVoiceEmotion, onExitVoice, sessionId: 
       }
     }
   }, [onVoiceEmotion]);
-
-  // ── Sarvam fast-path: all hooks above must run unconditionally first ───────
-  if (isIndian) {
-    return (
-      <SarvamVoiceMode
-        selectedLang={selectedLang}
-        onLangChange={onLangChange}
-        voiceGender={voiceGender}
-        onVoiceGenderChange={setVoiceGender}
-        onMobileStateChange={onMobileStateChange}
-      />
-    );
-  }
 
   if (loading) {
     return (
