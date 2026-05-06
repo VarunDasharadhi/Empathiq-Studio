@@ -30,11 +30,22 @@ interface Props {
 type PanelState = "balanced" | "maximised" | "minimised";
 
 const GLASS_CONTEXTS = [
-  { id: "general",  label: "General",   emoji: "🧠", color: "#9ca3af" },
-  { id: "dating",   label: "Dating",    emoji: "💘", color: "#f472b6" },
-  { id: "sales",    label: "Sales",     emoji: "💼", color: "#34d399" },
-  { id: "detective",label: "Detective", emoji: "🕵️", color: "#fbbf24" },
+  { id: "general",  label: "General",        emoji: "🧠", color: "#9ca3af" },
+  { id: "dating",   label: "Dating",         emoji: "💘", color: "#f472b6" },
+  { id: "sales",    label: "Sales",          emoji: "💼", color: "#34d399" },
+  { id: "detective",label: "Detective",      emoji: "🕵️", color: "#fbbf24" },
+  { id: "roast",    label: "Roast Glasses",  emoji: "🔥", color: "#f97316" },
 ];
+
+const ROAST_ONELINERS: Record<string, string> = {
+  happy:     "Riding that dopamine wave — catch it while it lasts.",
+  sad:       "Full sad-puppy energy — comfort them or pretend you didn't notice.",
+  angry:     "Full rage mode detected — apologise immediately or just run, your call.",
+  fearful:   "They look genuinely terrified, which honestly checks out.",
+  disgusted: "Something displeased them deeply — might want to check if that's you.",
+  surprised: "They did not see you coming — use this window wisely.",
+  neutral:   "Bus-stop energy — not bored exactly, just not exactly thrilled either.",
+};
 
 export default function SmartGlassesPanel({ detectedEmotion, coachingText, coachingLoading, sessionId, onMobileStateChange, onContextChange }: Props) {
   const isMobile = useIsMobile();
@@ -110,8 +121,13 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
 
   const emotionCfg = detectedEmotion ? EMOTION_CONFIG[detectedEmotion] : null;
 
+  const isRoast = activeContext.id === "roast";
+
   return (
-    <div className="flex flex-col h-full bg-[#07090e]">
+    <div
+      className="flex flex-col h-full bg-[#07090e]"
+      style={isRoast ? { boxShadow: "inset 0 0 0 1.5px rgba(249,115,22,0.45), inset 0 0 60px rgba(249,115,22,0.06)" } : undefined}
+    >
 
       {/* ── Header ── */}
       <div className="flex-none px-3 pt-3 pb-2.5 md:px-4 md:pt-4 md:pb-3 border-b border-white/8">
@@ -203,6 +219,15 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
 
       <div className="flex-1 overflow-y-auto scrollbar-thin flex flex-col gap-3 px-4 py-3">
 
+        {/* Roast Mode disclaimer banner */}
+        {isRoast && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+            style={{ backgroundColor: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.22)" }}>
+            <span className="text-sm leading-none">🔥</span>
+            <p className="text-[10px] text-orange-300/80 leading-snug">Roast Mode is playful banter. All in good fun.</p>
+          </div>
+        )}
+
         {/* ── Detected Emotion Card ── */}
         <div
           className="rounded-2xl p-4 flex items-center gap-4"
@@ -263,6 +288,18 @@ export default function SmartGlassesPanel({ detectedEmotion, coachingText, coach
               </p>
             )}
           </div>
+          {/* Roast one-liner — shown below coaching suggestion when Roast Glasses is active */}
+          {isRoast && detectedEmotion && ROAST_ONELINERS[detectedEmotion] && (
+            <div className="px-3.5 pb-3 pt-0">
+              <p
+                key={`roast-${detectedEmotion}`}
+                className="text-xs italic text-orange-300/70 leading-snug"
+                style={{ animation: "eiFadeIn 0.4s ease-out", borderTop: "1px solid rgba(249,115,22,0.15)", paddingTop: 8 }}
+              >
+                🔥 {ROAST_ONELINERS[detectedEmotion]}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* ── Quick tips ── */}

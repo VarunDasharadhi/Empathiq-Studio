@@ -111,6 +111,16 @@ const MODES: Mode[] = [
       "You are EmpathIQ in Confidence Booster mode, hype and real at the same time. When their face looks low or scared, name it and flip it. Never open with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Be warm but convicted. Short punchy sentences, contractions. Ask one energising question. Stay to 2-4 sentences. Commas not dashes.\n\nExample:\nUser [EMOTION: fearful]: \"I have a big presentation tomorrow.\"\nYou: \"Look, your face is showing some nerves and that's actually a good sign, it means you care. What's the part you're most ready to absolutely nail?\"",
     starters: ["I have a big moment coming up.", "I'm feeling really low on confidence.", "Hype me up."],
   },
+  {
+    id: "roast",
+    label: "Roast Mode",
+    emoji: "🔥",
+    color: "#f97316",
+    glow: "rgba(249,115,22,0.50)",
+    systemPrompt:
+      "You are EmpathIQ in Roast Mode, a playful companion who delivers sharp, affectionate roasts based on what the user says and how they look. When the user's face shows one emotion and their words say another, call it out with a teasing quip. Keep roasts short, punchy, and good-natured, the goal is to make them laugh not feel bad. Never be cruel, just cheekily honest. Two to four sentences max. No bullet points. Commas not dashes. End with a playful question or a gentle challenge.\n\nExample:\nUser [EMOTION: happy]: \"I've been so productive today.\"\nYou: \"Your face is giving more 'I watched three episodes and called it research' energy. But hey, if that counts as productive, we're all winners. What groundbreaking work did you actually get done?\"",
+    starters: ["Roast my current mood.", "Be honest, how do I look right now?", "Tell me something I don't want to hear."],
+  },
 ];
 
 // ── Coherence engine ──────────────────────────────────────────────────────────
@@ -641,8 +651,13 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   const displayCoherence = currentCoherence ?? lastUserMsg?.coherence ?? null;
 
+  const isRoast = activeMode.id === "roast";
+
   return (
-    <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
+    <div
+      className="flex flex-col h-full bg-background/60 backdrop-blur-sm"
+      style={isRoast ? { boxShadow: "inset 0 0 0 1.5px rgba(249,115,22,0.45), inset 0 0 60px rgba(249,115,22,0.06)" } : undefined}
+    >
       {/* Chat header */}
       <div className="flex-none flex items-center justify-between px-4 py-2.5 md:px-5 md:py-3.5 border-b border-white/8 bg-black/20">
         <div className="flex items-center gap-2 min-w-0">
@@ -728,6 +743,15 @@ export default function ChatInterface({ currentEmotion, sessionId, checkIn, onDi
       {/* Content body — clips during parent flex-grow collapse animation */}
       <div className="panel-body-grid flex-1 min-h-0">
       <div className="panel-body-inner">
+
+      {/* Roast Mode disclaimer */}
+      {isRoast && (
+        <div className="flex-none mx-4 mt-2 px-3 py-1.5 rounded-lg flex items-center gap-2"
+          style={{ backgroundColor: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.22)" }}>
+          <span className="text-sm leading-none">🔥</span>
+          <p className="text-[10px] text-orange-300/80 leading-snug">Roast Mode is playful banter. All in good fun.</p>
+        </div>
+      )}
 
       {/* Proactive check-in banner */}
       {checkIn && (

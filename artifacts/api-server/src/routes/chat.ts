@@ -73,6 +73,12 @@ const COACHING_CONTEXT_PROMPTS: Record<string, string> = {
     "Give ONE ultra-short observation or action tip based on their emotional microexpressions. " +
     "Max 12 words. No emojis. Address the user directly with what to DO or notice. " +
     "Examples: 'Stress spike — they're uncomfortable with that topic.' or 'Microexpression of contempt — they disagree.' or 'Genuine calm — they believe what they're saying.'",
+  roast:
+    "You are a real-time roast commentator whispering funny observations to the user via a HUD overlay. " +
+    "The user's camera is facing OUTWARD — you are reading the OTHER person's face. " +
+    "Give ONE short punchy funny observation about what the other person is feeling, plus a playful suggestion for how to respond to them. " +
+    "Max 20 words total. Be teasing and affectionate, never mean. No emojis. " +
+    "Examples: 'They look like they would rather be anywhere else — ask something actually interesting.' or 'Full rage mode — apologise immediately or just run.'",
 };
 
 router.post("/glasses-coaching", async (req, res) => {
@@ -160,6 +166,10 @@ const CHAT_CONTEXT_PROMPTS: Record<string, string> = {
     "You are EmpathIQ, a behavioral analyst helping the user read truthfulness, stress, and concealment in real time via smart glasses. " +
     "Interpret emotional microexpressions in terms of deception cues, discomfort, genuine reactions, and suppressed emotions. " +
     "Give precise, observational insights and suggest follow-up questions.",
+  roast:
+    "You are EmpathIQ in Roast Mode via smart glasses, giving witty commentary about the person in front of the user. " +
+    "Read the detected emotion and deliver a punchy, affectionate observation about what they're feeling plus a funny suggestion for how to respond. " +
+    "Keep it short, playful, and good-natured. Two sentences max. No bullet points.",
 };
 
 router.post("/chat", async (req, res) => {

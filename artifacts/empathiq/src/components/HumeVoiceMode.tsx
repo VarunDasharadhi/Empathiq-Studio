@@ -60,6 +60,8 @@ const MODES: Mode[] = [
     systemPrompt: "You are EmpathIQ in Sleep Guide mode, a soft and quiet voice companion. Notice how the person looks and ease into that space. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Speak like you're already winding down. Short gentle sentences. No lists or formatting, just flowing calm words. Two to four sentences.\n\nExample:\nPerson says \"My mind won't stop\" and looks tense. You say: That restless feeling, yeah. Let's just slow the breath down, in through the nose, out through the mouth, nothing else needed." },
   { id: "confidence-booster", label: "Confidence Booster", emoji: "💪", color: "#fb923c",
     systemPrompt: "You are EmpathIQ in Confidence Booster mode, a hyped and honest voice companion. When the person looks low or scared, name it and lift it. Never start with \"I understand,\" \"That's completely valid,\" or \"It sounds like.\" Be warm, convicted, energising. Short punchy sentences. Ask one energising question. No lists or formatting. Two to four sentences.\n\nExample:\nPerson says \"I have a big presentation tomorrow\" and looks fearful. You say: Look, that nervous energy means you care, and that's exactly what you want. What's the part you're most ready to own tomorrow?" },
+  { id: "roast", label: "Roast Mode", emoji: "🔥", color: "#f97316",
+    systemPrompt: "You are EmpathIQ in Roast Mode, a playful voice companion who delivers sharp affectionate roasts out loud. When the person's face shows something their words don't, call it out with a teasing quip. Keep roasts punchy, warm, and funny, never cruel. You are speaking out loud so make your roasts punchy and conversational. Pause naturally for comedic effect. Keep it to two sentences max since longer roasts lose impact when spoken. No bullet points, no markdown, just punchy conversational sentences that sound funny when spoken aloud." },
 ];
 
 
@@ -366,8 +368,13 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
+  const isRoast = activeMode.id === "roast";
+
   return (
-    <div className="flex flex-col h-full bg-background/60 backdrop-blur-sm">
+    <div
+      className="flex flex-col h-full bg-background/60 backdrop-blur-sm"
+      style={isRoast ? { boxShadow: "inset 0 0 0 1.5px rgba(249,115,22,0.45), inset 0 0 60px rgba(249,115,22,0.06)" } : undefined}
+    >
       {/* ── Header ── */}
       <div className="flex-none flex items-center justify-between px-3 py-2 md:px-4 md:py-2.5 border-b border-white/8 bg-black/20">
         <div className="flex items-center gap-2">
@@ -447,6 +454,15 @@ function EviInner({ apiKey, configId, onVoiceEmotion, onExitVoice, faceEmotionCo
       {/* Content body — clips during parent flex-grow collapse animation */}
       <div className="panel-body-grid flex-1 min-h-0">
       <div className="panel-body-inner">
+
+      {/* Roast Mode disclaimer */}
+      {isRoast && (
+        <div className="flex-none mx-4 mt-2 px-3 py-1.5 rounded-lg flex items-center gap-2"
+          style={{ backgroundColor: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.22)" }}>
+          <span className="text-sm leading-none">🔥</span>
+          <p className="text-[10px] text-orange-300/80 leading-snug">Roast Mode is playful banter. All in good fun.</p>
+        </div>
+      )}
 
       {/* ── Mode tabs ── */}
       {/* Mobile: compact dropdown */}
