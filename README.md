@@ -6,7 +6,7 @@
 ![EmpathIQ](./screenshots/empathiq.jpeg)
 
 ## 🔗 Live Demo
-👉 https://empathiq-studio--varundasharadhi.replit.app
+👉 https://empathiq-studio-api-server.vercel.app/app — live on Vercel (landing at `/`, app at `/app`)
 
 ## 🎬 Demo Video
 👉 https://www.loom.com/share/ee3177d34b40404487115fca5f8366ed
@@ -49,13 +49,23 @@
 - Recharts
 - Tailwind CSS
 
-## 🚀 Setup
+## 🚀 Setup (local)
+This is a pnpm workspace monorepo (Node 24).
 1. Clone the repo
-2. Add environment variables:
-   - ANTHROPIC_API_KEY
-   - HUME_API_KEY
-3. npm install
-4. npm run dev
+2. Add API keys to `artifacts/api-server/.env`:
+   - `ANTHROPIC_API_KEY`
+   - `HUME_API_KEY`
+3. `pnpm install`
+4. Build + run:
+   - API: `pnpm --filter @workspace/api-server run dev` (Express on `:8080`)
+   - Web: `pnpm --filter @workspace/empathiq run dev` (Vite on `:3000`, proxies `/api` → `:8080`)
+
+## ☁️ Deployment (Vercel)
+Deployed as a single full-stack Vercel project — Vite frontend served as static files, the Express API bundled as a serverless function.
+- Config: [`vercel.json`](./vercel.json) at the repo root. Builds the libs + API bundle + frontend, then routes `/api/*` to the serverless function (`api/index.mjs`) and `/app` → `/app.html`.
+- Required Vercel **project settings**: Root Directory = repo root, Framework Preset = `Other`, env vars `ANTHROPIC_API_KEY` + `HUME_API_KEY`.
+- Pushing to `main` triggers a production deploy via the GitHub integration.
+- Note: session history is in-memory (resets on serverless cold starts); chat/voice/coaching are stateless.
 
 ## 🔮 Future Vision
 - Meta smart glasses integration

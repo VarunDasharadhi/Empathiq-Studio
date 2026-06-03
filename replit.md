@@ -11,6 +11,16 @@ Multimodal emotional AI app — reads your face, voice, and words to respond wit
 
 Required secrets: `ANTHROPIC_API_KEY`, `HUME_API_KEY` (EVI 3)
 
+## Deploy (Vercel)
+
+Deployed as a single full-stack Vercel project: static Vite frontend + the Express API as a serverless function. Config lives in `vercel.json` (repo root).
+
+- **Build** (`vercel.json#buildCommand`): builds libs, bundles the API (`artifacts/api-server/dist/serverless.mjs`, an esbuild bundle that exports the Express app without `app.listen()`), builds the Vite frontend, and copies it to `public/`.
+- **Function**: `api/index.mjs` re-exports the built Express app; `vercel.json` rewrites `/api/*` to it and `/app` → `/app.html`.
+- **Required Vercel project settings**: Root Directory = repo root, Framework Preset = `Other`, env vars `ANTHROPIC_API_KEY` + `HUME_API_KEY`. Project: `empathiq-studio` (team-viper). Prod URL: `https://empathiq-studio-api-server.vercel.app` (app at `/app`).
+- Push to `main` → production deploy via GitHub integration.
+- **Caveat**: `artifacts/api-server/src/routes/sessions.ts` uses in-memory storage, so session history is ephemeral across serverless cold starts (the Neon `DATABASE_URL` is currently unused).
+
 ## Stack
 
 - **Monorepo**: pnpm workspaces, Node 24, TypeScript 5.9
