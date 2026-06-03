@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "pnpm run typecheck:libs && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/empathiq run build",
+  "buildCommand": "pnpm -w run typecheck:libs && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/empathiq run build",
   "outputDirectory": "artifacts/empathiq/dist/public",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
